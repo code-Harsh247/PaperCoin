@@ -1,6 +1,7 @@
 // components/TradingPlatform.jsx
 "use client"
 
+
 import React, { useState } from 'react';
 import TabNavigation from './TabNavigation';
 import OpenOrders from './OpenOrders';

@@ -14,7 +14,7 @@ export async function POST(req) {
     const orders = await getOrderHistory(user_id); // Fetch orders
     return NextResponse.json(orders, { status: 200 });
   } catch (error) {
-    console.error("Error fetching open orders:", error);
+    console.error("Error fetching order history:", error);
     return NextResponse.json({ message: "Internal Server Error" }, { status: 500 });
   }
 }
