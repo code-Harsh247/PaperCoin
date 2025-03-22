@@ -10,7 +10,7 @@ const TabNavigation = ({ activeTab, setActiveTab }) => {
   useEffect(() => {
     const fetchOrders = async () => {
       try {
-        const response = await fetch("http://localhost:3000/api/openOrders", {
+        const response = await fetch("/api/openOrders", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ user_id: 1 }),
