@@ -4,7 +4,7 @@ import OrderBook from '@/components/OrderBook'
 
 const page = () => {
   return (
-    <div className='w-screen h-screen bg-black'><TradingPlatform/></div>
+    <div className='w-screen h-screen'><OrderBook symb="btcusdt"/></div>
   )
 }
 
