@@ -1,5 +1,6 @@
 import React from 'react'
 import TradingPlatform from '@/components/TradingPlatform'
+import OrderBook from '@/components/OrderBook'
 
 const page = () => {
   return (
