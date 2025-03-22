@@ -1,26 +1,49 @@
+"use client";
 
-
-// components/OpenOrders.jsx
-"use client"
-
-import React from 'react';
-import { Search } from 'lucide-react';
-import { demoOpenOrders } from './TradingPlatform';
+import React, { useEffect, useState } from "react";
+import { Search } from "lucide-react";
 
 const OpenOrders = () => {
+  const [orders, setOrders] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    const fetchOrders = async () => {
+      try {
+        const response = await fetch("/api/openOrders", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ user_id: 1 }),
+        });
+
+        if (!response.ok) throw new Error("Failed to fetch orders");
+
+        const data = await response.json();
+        setOrders(data);
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchOrders();
+  }, []);
+
   const columns = [
-    { id: 'date', label: 'Date' },
-    { id: 'pair', label: 'Pair' },
-    { id: 'type', label: 'Type', sortable: true },
-    { id: 'side', label: 'Side', sortable: true },
-    { id: 'price', label: 'Price', sortable: true },
-    { id: 'amount', label: 'Amount' },
-    { id: 'amountPerIceberg', label: 'Amount per Iceberg Order' },
-    { id: 'filled', label: 'Filled' },
-    { id: 'total', label: 'Total' },
+    { id: "trade_time", label: "Date" },
+    { id: "symbol", label: "Pair" },
+    { id: "order_type", label: "Type", sortable: true },
+    { id: "side", label: "Side", sortable: true },
+    { id: "price", label: "Price", sortable: true },
+    { id: "amount", label: "Amount" },
+    { id: "filled", label: "Filled" },
+    { id: "total", label: "Total" },
   ];
 
-  const orders = demoOpenOrders;
+  if (loading) return <p className="text-gray-400">Loading orders...</p>;
+  if (error) return <p className="text-red-500">Error: {error}</p>;
 
   return (
     <div>
@@ -29,14 +52,9 @@ const OpenOrders = () => {
           <thead>
             <tr>
               {columns.map((column) => (
-                <th 
-                  key={column.id} 
-                  className="px-4 py-2 text-left text-sm font-medium text-gray-400"
-                >
+                <th key={column.id} className="px-4 py-2 text-left text-sm font-medium text-gray-400">
                   {column.label}
-                  {column.sortable && (
-                    <span className="ml-1 inline-block">▼</span>
-                  )}
+                  {column.sortable && <span className="ml-1 inline-block">▼</span>}
                 </th>
               ))}
             </tr>
@@ -44,18 +62,17 @@ const OpenOrders = () => {
           <tbody>
             {orders.length > 0 ? (
               orders.map((order) => (
-                <tr key={order.id} className="border-t border-gray-800 hover:bg-gray-800">
-                  <td className="px-4 py-3 text-sm">{order.date}</td>
-                  <td className="px-4 py-3 text-sm">{order.pair}</td>
-                  <td className="px-4 py-3 text-sm">{order.type}</td>
-                  <td className={`px-4 py-3 text-sm ${order.side === 'Buy' ? 'text-green-500' : 'text-red-500'}`}>
-                    {order.side}
+                <tr key={order.order_id} className="border-t border-gray-800 hover:bg-gray-800">
+                  <td className="px-4 py-3 text-sm">{new Date(order.trade_time).toLocaleString()}</td>
+                  <td className="px-4 py-3 text-sm">{order.symbol}</td>
+                  <td className="px-4 py-3 text-sm">{order.order_type}</td>
+                  <td className={`px-4 py-3 text-sm ${order.side === "buy" ? "text-green-500" : "text-red-500"}`}>
+                    {order.side.charAt(0).toUpperCase() + order.side.slice(1)}
                   </td>
-                  <td className="px-4 py-3 text-sm">{order.price.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
-                  <td className="px-4 py-3 text-sm">{order.amount}</td>
-                  <td className="px-4 py-3 text-sm">{order.amountPerIceberg}</td>
-                  <td className="px-4 py-3 text-sm">{order.filled}</td>
-                  <td className="px-4 py-3 text-sm">{order.total.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                  <td className="px-4 py-3 text-sm">{parseFloat(order.price).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                  <td className="px-4 py-3 text-sm">{parseFloat(order.amount)}</td>
+                  <td className="px-4 py-3 text-sm">{parseFloat(order.filled)}</td>
+                  <td className="px-4 py-3 text-sm">{parseFloat(order.total).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                 </tr>
               ))
             ) : (
