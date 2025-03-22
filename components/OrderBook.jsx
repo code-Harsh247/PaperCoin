@@ -129,7 +129,7 @@ const OrderBookComponent = ({ symb }) => {
 
       ws.onerror = (error) => {
         console.error('Trade WebSocket error:', error);
-      };
+      };yield
 
       ws.onclose = () => {
         console.log('Trade WebSocket connection closed');
