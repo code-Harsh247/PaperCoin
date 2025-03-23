@@ -1,9 +1,10 @@
 import React from 'react'
 import TradingPlatform from '@/components/TradingPlatform'
+import TradingForm from '@/components/TradingForm'
 
 const page = () => {
   return (
-    <div className='w-screen h-screen bg-black'><TradingPlatform/></div>
+    <div className='w-screen h-screen bg-black'><TradingForm/>  </div>
   )
 }
 
