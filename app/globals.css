@@ -5,6 +5,10 @@
 
 @custom-variant dark (&:is(.dark *));
 
+html {
+  scroll-behavior: smooth;
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -122,3 +126,9 @@
     @apply bg-background text-foreground font-['Roboto_Condensed'];
   }
 }
+
+@font-face {
+  font-family: 'Array';
+  src: url('/fonts/Array-Regular.otf') format('opentype');
+}
+
