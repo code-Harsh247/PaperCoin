@@ -84,7 +84,7 @@ const AuthModal = ({ isOpen, onClose, initialMode = 'login' }) => {
   }
   
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-70">
+    <div className="fixed inset-0 z-50 flex items-center justify-center backdrop-blur-md bg-black/40">
       <div 
         className="bg-gray-900 rounded-xl w-full max-w-md p-8 relative animate-fadeIn"
         onClick={(e) => e.stopPropagation()}
