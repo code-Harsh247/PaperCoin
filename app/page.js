@@ -2,10 +2,25 @@
 import React, { useState } from 'react'
 import Link from 'next/link'
 import VideoModal from '@/components/VideoModal'
+import AuthModal from '@/components/AuthModal'
 
 function Page() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [isModalOpen, setIsModalOpen] = useState(false) 
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false)
+  const [authModalMode, setAuthModalMode] = useState('login')
+
+  const openLoginModal = () => {
+    setAuthModalMode('login');
+    setIsAuthModalOpen(true);
+  };
+
+  const openSignupModal = () => {
+    setAuthModalMode('signup');
+    setIsAuthModalOpen(true);
+  };
+
+
 
   const features = [
     {
@@ -52,6 +67,11 @@ function Page() {
   return (
     <div className="relative h-screen w-screen overflow-x-hidden bg-black">
       <VideoModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
+      <AuthModal 
+        isOpen={isAuthModalOpen} 
+        onClose={() => setIsAuthModalOpen(false)} 
+        initialMode={authModalMode} 
+      />
       {/* Navigation */}
       <nav className="absolute top-0 left-0 right-0 z-20 px-14 py-4">
         <div className="container mx-auto flex justify-between items-center">
@@ -112,8 +132,7 @@ function Page() {
 
           {/* Login/Signup Buttons */}
           <div className="hidden md:flex items-center space-x-4">
-            <button className="text-white hover:text-amber-300 transition-colors">Login</button>
-            <button className="bg-amber-500 hover:bg-amber-600 text-black font-bold py-2 px-4 rounded-lg transition-colors">Sign Up</button>
+            <button className="bg-amber-500 hover:bg-amber-600 text-black font-bold py-2 px-4 rounded-lg transition-colors" onClick={openSignupModal}>Get Started</button>
           </div>
         </div>
       </nav>
