@@ -1,9 +1,11 @@
 'use client'
 import React, { useState } from 'react'
 import Link from 'next/link'
+import VideoModal from '@/components/VideoModal'
 
 function Page() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
+  const [isModalOpen, setIsModalOpen] = useState(false) 
 
   const features = [
     {
@@ -22,6 +24,10 @@ function Page() {
       icon: "📊"
     }
   ]
+
+  const handleWatchDemo = () => {
+    setIsModalOpen(true);
+  };
 
   const handleScroll = (e, id) => {
     e.preventDefault();
@@ -45,6 +51,7 @@ function Page() {
 
   return (
     <div className="relative h-screen w-screen overflow-x-hidden bg-black">
+      <VideoModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
       {/* Navigation */}
       <nav className="absolute top-0 left-0 right-0 z-20 px-14 py-4">
         <div className="container mx-auto flex justify-between items-center">
@@ -138,7 +145,7 @@ function Page() {
             <button className="bg-amber-500 hover:bg-amber-600 text-black font-bold py-3 px-8 md:px-10 rounded-lg text-lg transition-colors">
               Start Trading
             </button>
-            <button className="border border-gray-600 hover:border-gray-400 text-white font-bold py-3 px-8 md:px-10 rounded-lg text-lg transition-colors">
+            <button className="border border-gray-600 hover:border-gray-400 text-white font-bold py-3 px-8 md:px-10 rounded-lg text-lg transition-colors" onClick={handleWatchDemo}>
               Watch Demo
             </button>
           </div>
