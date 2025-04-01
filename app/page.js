@@ -72,6 +72,7 @@ function Page() {
         onClose={() => setIsAuthModalOpen(false)} 
         initialMode={authModalMode} 
       />
+      
       {/* Navigation */}
       <nav className="absolute top-0 left-0 right-0 z-20 px-14 py-4">
         <div className="container mx-auto flex justify-between items-center">
