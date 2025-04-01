@@ -65,7 +65,7 @@ function Page() {
   };
 
   return (
-    <div className="relative h-screen w-screen overflow-x-hidden bg-black">
+    <div className="relative h-screen w-screen overflow-x-hidden bg-black select-none">
       <VideoModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
       <AuthModal 
         isOpen={isAuthModalOpen} 
@@ -196,7 +196,7 @@ function Page() {
       </div>
 
       {/* Feature Section */}
-      <section id="features" className="bg-gray-900 py-20">
+      <section id="features" className="bg-black py-20">
         <div className="container mx-auto px-6">
           <h2 className="text-3xl md:text-4xl font-bold text-white text-center mb-4">
             Why Choose <span className="text-amber-500">PaperCoin</span>
@@ -208,7 +208,7 @@ function Page() {
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             {features.map((feature, index) => (
-              <div key={index} className="bg-gray-800 rounded-xl p-8 hover:bg-gray-750 transition-colors">
+              <div key={index} className="bg-[#0F0F0F] rounded-xl p-8 hover:bg-gray-750 transition-colors">
                 <div className="text-4xl mb-4">{feature.icon}</div>
                 <h3 className="text-xl font-bold text-white mb-2">{feature.title}</h3>
                 <p className="text-gray-400">{feature.description}</p>
@@ -225,7 +225,7 @@ function Page() {
       </section>
 
       {/* How It Works Section */}
-      <section id="how-it-works" className="bg-black py-20">
+      <section id="how-it-works" className="bg-[#0F0F0F] py-20">
         <div className="container mx-auto px-6">
           <h2 className="text-3xl md:text-4xl font-bold text-white text-center mb-4">
             How It Works
@@ -263,7 +263,7 @@ function Page() {
       </section>
 
       {/* Testimonials */}
-      <section id="testimonials" className="bg-gray-900 py-20">
+      <section id="testimonials" className="bg-[#0F0F0F] py-20">
         <div className="container mx-auto px-6">
           <h2 className="text-3xl md:text-4xl font-bold text-white text-center mb-4">
             What Our Users Say
@@ -336,7 +336,7 @@ function Page() {
           <p className="text-black text-lg max-w-2xl mx-auto mb-8 opacity-90">
             Join thousands of traders who are mastering crypto trading without financial risk.
           </p>
-          <button className="bg-black text-white font-bold py-3 px-10 rounded-lg text-lg hover:bg-gray-900 transition-colors">
+          <button className="bg-black text-white font-bold py-3 px-10 rounded-lg text-lg hover:bg-gray-900 transition-colors" onClick={openSignupModal}>
             Get Started For Free
           </button>
         </div>
