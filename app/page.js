@@ -161,7 +161,7 @@ function Page() {
           </p>
 
           <div className="mt-8 md:mt-10 flex flex-col sm:flex-row space-y-4 sm:space-y-0 sm:space-x-4">
-            <button className="bg-amber-500 hover:bg-amber-600 text-black font-bold py-3 px-8 md:px-10 rounded-lg text-lg transition-colors">
+            <button className="bg-amber-500 hover:bg-amber-600 text-black font-bold py-3 px-8 md:px-10 rounded-lg text-lg transition-colors" onClick={openSignupModal}>
               Start Trading
             </button>
             <button className="border border-gray-600 hover:border-gray-400 text-white font-bold py-3 px-8 md:px-10 rounded-lg text-lg transition-colors" onClick={handleWatchDemo}>
@@ -282,8 +282,7 @@ function Page() {
                 </div>
               </div>
               <p className="text-gray-400">
-                "They forced me to write this review but I have to say, this platform is amazing! I
-                learned so much about crypto trading and the community is super supportive."
+                "Bruh, Papercoin got me feeling like a crypto king even though I’m literally just pretending. But fr, I’m out here losing fake money and calling it a ‘strategic loss. Still slaps tho, ngl"
               </p>
               <div className="flex text-amber-500 mt-4">
                 ★★★★★
@@ -294,13 +293,12 @@ function Page() {
               <div className="flex items-center mb-4">
                 <div className="w-12 h-12 bg-gray-700 rounded-full mr-4"></div>
                 <div>
-                  <h4 className="text-white font-bold">Maria Chen</h4>
-                  <p className="text-gray-500 text-sm">Beginner Investor</p>
+                  <h4 className="text-white font-bold">Sayali Kale</h4>
+                  <p className="text-gray-500 text-sm">Aurat</p>
                 </div>
               </div>
               <p className="text-gray-400">
-                "As someone new to crypto, this platform gave me a safe space to learn the basics
-                without the stress of losing money. The tutorials are excellent!"
+                "Honestly, I’m only on Papercoin ‘cause you made me, and now I’m over here pretending every trade is a flex. Losing fake crypto is lowkey more fun than my real life right now, ngl."
               </p>
               <div className="flex text-amber-500 mt-4">
                 ★★★★★
@@ -311,13 +309,12 @@ function Page() {
               <div className="flex items-center mb-4">
                 <div className="w-12 h-12 bg-gray-700 rounded-full mr-4"></div>
                 <div>
-                  <h4 className="text-white font-bold">James Wilson</h4>
-                  <p className="text-gray-500 text-sm">Financial Advisor</p>
+                  <h4 className="text-white font-bold">Ansh Sahu</h4>
+                  <p className="text-gray-500 text-sm">Cool guy</p>
                 </div>
               </div>
               <p className="text-gray-400">
-                "I recommend PaperCoin to all my clients interested in crypto. It's the perfect
-                way to understand market dynamics before putting real capital at risk."
+                "Okay, I didn’t wanna do this, but now I’m lowkey obsessed with Papercoin. My fake trades are crashing harder than my Wi-Fi, and I’m just here like ‘yep, I’m a trader now."
               </p>
               <div className="flex text-amber-500 mt-4">
                 ★★★★★
