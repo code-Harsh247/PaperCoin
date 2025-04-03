@@ -10,11 +10,6 @@ function Page() {
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false)
   const [authModalMode, setAuthModalMode] = useState('login')
 
-  const openLoginModal = () => {
-    setAuthModalMode('login');
-    setIsAuthModalOpen(true);
-  };
-
   const openSignupModal = () => {
     setAuthModalMode('signup');
     setIsAuthModalOpen(true);
