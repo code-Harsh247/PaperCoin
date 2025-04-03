@@ -11,6 +11,7 @@ export async function middleware(request) {
   // Check if the requested path is in the protected routes
   if (protectedRoutes.some(route => path.startsWith(route))) {
     const token = request.cookies.get('token')?.value;
+    console.log('Token:', token); // Debugging line
     
     // If no token exists, redirect to login
     if (!token) {
