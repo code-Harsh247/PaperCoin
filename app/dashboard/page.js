@@ -1,41 +1,72 @@
-'use client'
-import React, { useEffect } from 'react';
-import { useAuth } from '@/hooks/useAuth';
+'use client';
+import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import UserNameModal from '@/components/UserNameModal';
-import { User } from 'lucide-react';
 import axios from 'axios';
-import { useState } from 'react';
+
+import UserNameModal from '@/components/UserNameModal';
+import { useAuthStore } from '@/store/useAuthStore';
 
 export default function Dashboard() {
-
-  const { user, loading, signOut } = useAuth();
+  const { user, loading, setUser, setLoading, signOut } = useAuthStore();
   const router = useRouter();
-
   const [isUserNameSet, setIsUserNameSet] = useState(true);
 
+  // Load user on mount
   useEffect(() => {
-    // Check if user has set a username
+    const loadUser = async () => {
+      try {
+        const res = await fetch('/api/auth/me');
+        if (res.ok) {
+          const data = await res.json();
+          setUser(data);
+        } else {
+          setUser(null);
+        }
+      } catch (err) {
+        console.error('Failed to load user', err);
+        setUser(null);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadUser();
+  }, [setUser, setLoading]);
+
+  // Check if username is set
+  useEffect(() => {
     const checkUserName = async () => {
       try {
         const response = await axios.post('/api/auth/checkUser', {
-          email: user.email,//HARD CODED FOR NOW
+          email: user.email,
         });
-        console.log('response', response.data);
         setIsUserNameSet(response.data.isUserNameSet);
       } catch (error) {
         console.error('Error checking username:', error);
       }
     };
 
-    if (user) {
-      checkUserName();
+    if (user) checkUserName();
+  }, [user]);
+
+  const refreshUserStatus = async () => {
+    try {
+      const response = await axios.post('/api/auth/checkUser', {
+        email: user.email,
+      });
+      setIsUserNameSet(response.data.isUserNameSet);
+    } catch (error) {
+      console.error('Error refreshing username:', error);
     }
-  }, [user])
+  };
 
+  // Redirect if not authenticated
+  useEffect(() => {
+    if (!loading && !user) {
+      router.push('/?authRequired=true');
+    }
+  }, [loading, user, router]);
 
-
-  // Handle loading state
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-900">
@@ -44,22 +75,7 @@ export default function Dashboard() {
     );
   }
 
-  // This should be handled by middleware, but just in case
-  if (!user) {
-    router.push('/?authRequired=true');
-    return null;
-  }
-  
-  const refreshUserStatus = async () => {
-    try {
-      const response = await axios.post('/api/auth/checkUser', {
-        email: user.email,
-      });
-      setIsUserNameSet(response.data.isUserNameSet);
-    } catch (error) {
-      console.error('Error checking username:', error);
-    }
-  };
+  if (!user) return null;
 
   return (
     <div className="min-h-screen bg-gray-900">
@@ -90,7 +106,9 @@ export default function Dashboard() {
 
             {/* Logout button */}
             <button
-              onClick={signOut}
+              onClick={()=>{
+                signOut();
+                router.push('/');}}
               className="bg-gray-800 hover:bg-gray-700 text-white px-4 py-2 rounded-lg transition-colors"
             >
               Sign Out
