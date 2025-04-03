@@ -16,7 +16,7 @@ export function AuthProvider({ children }) {
     async function loadUserFromAPI() {
       try {
         const response = await fetch('/api/auth/me');
-        
+
         if (response.ok) {
           const userData = await response.json();
           setUser(userData);
@@ -34,16 +34,45 @@ export function AuthProvider({ children }) {
     loadUserFromAPI();
   }, []);
 
+  
+
   // Sign out function
   const signOut = async () => {
     try {
-      await fetch('/api/auth/logout', { method: 'POST' });
-      setUser(null);
-      router.push('/');
+      await fetch('/api/auth/logout', {
+        method: 'POST',
+        credentials: 'include',
+      })
+      setUser(null)
     } catch (error) {
-      console.error('Error signing out:', error);
+      console.error('Logout failed:', error)
     }
   };
+
+  useEffect(() => {
+    const checkLoggedIn = async () => {
+      try {
+        // The /api/auth/me endpoint will check for the token cookie
+        const response = await fetch('/api/auth/me', {
+          credentials: 'include', // Important for cookies
+        })
+        
+        if (response.ok) {
+          const userData = await response.json()
+          setUser(userData)
+        }
+      } catch (error) {
+        console.error('Auth check failed:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+    
+    checkLoggedIn()
+  }, [])
+  
+
+  
 
   // Provide authentication context to children
   return (
@@ -56,10 +85,10 @@ export function AuthProvider({ children }) {
 // Hook to use authentication in components
 export function useAuth() {
   const context = useContext(AuthContext);
-  
+
   if (context === null) {
     throw new Error('useAuth must be used within an AuthProvider');
   }
-  
+
   return context;
 }

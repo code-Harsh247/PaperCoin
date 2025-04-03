@@ -4,23 +4,23 @@ import { cookies } from 'next/headers';
 import { jwtVerify } from 'jose';
 
 export async function GET() {
-  const token = cookies().get('token')?.value;
-  
-  if (!token) {
+  const cookieStore = await cookies(); // No need to await
+  const tokenCookie = cookieStore.get('token'); // Directly get cookie
+
+  if (!tokenCookie) {
     return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
   }
-  
+
+  const token = tokenCookie.value; // Get the actual token string
   try {
     // Verify the JWT token
-    const secret = new TextEncoder().encode(process.env.JWT_SECRET || 'your_jwt_secret_key');
+    const secret = new TextEncoder().encode(process.env.JWT_SECRET );
     const { payload } = await jwtVerify(token, secret);
     
     // Return user data (omitting sensitive information)
     return NextResponse.json({
-      id: payload.sub,
       name: payload.name,
       email: payload.email,
-      picture: payload.picture
     });
   } catch (error) {
     console.error('Error verifying token:', error);

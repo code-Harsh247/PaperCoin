@@ -1,6 +1,9 @@
 'use client'
 import React, { useState, useEffect } from 'react'
 import { XCircle } from 'lucide-react'
+import axios from 'axios'
+import { useRouter } from 'next/navigation'
+
 
 const AuthModal = ({ isOpen, onClose, initialMode = 'login' }) => {
   const [mode, setMode] = useState(initialMode) // 'login' or 'signup'
@@ -9,7 +12,8 @@ const AuthModal = ({ isOpen, onClose, initialMode = 'login' }) => {
   const [confirmPassword, setConfirmPassword] = useState('')
   const [name, setName] = useState('')
   const [formError, setFormError] = useState('')
-  
+  const [isLoading, setIsLoading] = useState(false)
+  const router = useRouter()
   // Reset form when modal opens/closes or mode changes
   useEffect(() => {
     setEmail('')
@@ -18,22 +22,22 @@ const AuthModal = ({ isOpen, onClose, initialMode = 'login' }) => {
     setName('')
     setFormError('')
   }, [isOpen, mode])
-  
+
   // Close modal when Escape key is pressed
   useEffect(() => {
     const handleEsc = (e) => {
       if (e.key === 'Escape') onClose()
     }
-    
+
     if (isOpen) {
       window.addEventListener('keydown', handleEsc)
     }
-    
+
     return () => {
       window.removeEventListener('keydown', handleEsc)
     }
   }, [isOpen, onClose])
-  
+
   // Prevent scrolling when modal is open
   useEffect(() => {
     if (isOpen) {
@@ -41,81 +45,131 @@ const AuthModal = ({ isOpen, onClose, initialMode = 'login' }) => {
     } else {
       document.body.style.overflow = 'auto'
     }
-    
+
     return () => {
       document.body.style.overflow = 'auto'
     }
   }, [isOpen])
-  
+
   if (!isOpen) return null
-  
-  const handleSubmit = (e) => {
+
+  const handleSubmit = async (e) => {
     e.preventDefault()
     setFormError('')
-    
+
     if (mode === 'signup') {
       // Validation for signup
       if (!name.trim()) {
         setFormError('Name is required')
         return
       }
-      
+
       if (password !== confirmPassword) {
         setFormError('Passwords do not match')
         return
       }
     }
-    
+
     if (!email.trim() || !password.trim()) {
       setFormError('Email and password are required')
       return
     }
-    
-    // Here you would handle authentication logic
-    console.log('Form submitted:', { mode, email, password, name })
-    
-    // Mock successful auth for now
-    onClose()
+
+    setIsLoading(true)
+
+    try {
+      if (mode === 'login') {
+        // Handle login with axios
+        const response = await axios.post('http://localhost:3000/api/auth/login',
+          { email, password },
+          {
+            headers: { 'Content-Type': 'application/json' },
+            withCredentials: true // Important for cookies
+          }
+        )
+
+        // Axios automatically throws errors for non-2xx responses
+        // and parses JSON responses
+
+        // No need to manually set cookies as the server handles it
+
+        // Notify parent component of successful login
+        onClose()
+        router.push('/auth-success'); // This will now execute
+        // window.location.reload() // Refresh page to apply auth state
+      } else {
+        // Handle signup with axios
+        const response = await axios.post('http://localhost:3000/api/auth/signUp',
+          { name, email, password },
+          { headers: { 'Content-Type': 'application/json' } }
+        )
+
+        // Auto-switch to login mode after successful signup
+        setMode('login')
+        setFormError('')
+        // Show success message
+        alert('Account created successfully! Please log in.')
+      }
+    } catch (error) {
+      console.error('Authentication error:', error)
+      // With axios, error response data is in error.response.data
+      const errorMessage = error.response?.data?.message || error.message || 'An unexpected error occurred'
+      setFormError(errorMessage)
+    } finally {
+      setIsLoading(false)
+    }
   }
-  
+
+  const handleLogout = async () => {
+    try {
+      await fetch('/api/auth/logout', {
+        method: 'POST',
+        credentials: 'include',
+      });
+      window.location.reload();
+    } catch (error) {
+      console.error('Logout failed:', error);
+    }
+  };
+
   const handleGoogleAuth = () => {
     // Redirect to Google OAuth endpoint
     window.location.href = '/api/auth/google'
   }
-  
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center backdrop-blur-md bg-black/40">
-      <div 
+      <div
         className="bg-gray-900 rounded-xl w-full max-w-md p-8 relative animate-fadeIn"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Close button */}
-        <button 
+        <button
           className="absolute top-4 right-4 text-gray-400 hover:text-white"
           onClick={onClose}
         >
           <XCircle size={24} />
         </button>
-        
+
         {/* Modal header */}
         <div className="mb-6 text-center">
           <h2 className="text-2xl font-bold text-white">
             {mode === 'login' ? 'Welcome' : 'Create an Account'}
           </h2>
           <p className="text-gray-400 mt-2">
-            {mode === 'login' 
-              ? 'Sign in to access your PaperCoin account' 
+            {mode === 'login'
+              ? 'Sign in to access your PaperCoin account'
               : 'Start your crypto trading journey today'}
           </p>
         </div>
-        
+
         {/* Form error message */}
         {formError && (
           <div className="mb-4 p-3 bg-red-900/50 border border-red-500 rounded-lg text-red-200 text-sm">
             {formError}
           </div>
         )}
-        
+
         {/* Auth Form */}
         <form onSubmit={handleSubmit}>
           {/* Name field - only for signup */}
@@ -132,7 +186,7 @@ const AuthModal = ({ isOpen, onClose, initialMode = 'login' }) => {
               />
             </div>
           )}
-          
+
           {/* Email field */}
           <div className="mb-4">
             <label htmlFor="email" className="block text-gray-300 mb-2 text-sm">Email</label>
@@ -145,7 +199,7 @@ const AuthModal = ({ isOpen, onClose, initialMode = 'login' }) => {
               placeholder="Enter your email"
             />
           </div>
-          
+
           {/* Password field */}
           <div className="mb-4">
             <label htmlFor="password" className="block text-gray-300 mb-2 text-sm">Password</label>
@@ -158,7 +212,7 @@ const AuthModal = ({ isOpen, onClose, initialMode = 'login' }) => {
               placeholder="Enter your password"
             />
           </div>
-          
+
           {/* Confirm Password field - only for signup */}
           {mode === 'signup' && (
             <div className="mb-4">
@@ -173,29 +227,30 @@ const AuthModal = ({ isOpen, onClose, initialMode = 'login' }) => {
               />
             </div>
           )}
-          
+
           {/* Forgot password link - only for login */}
           {mode === 'login' && (
             <div className="mb-6 text-right">
               <a href="#" className="text-sm text-amber-500 hover:text-amber-400">Forgot password?</a>
             </div>
           )}
-          
+
           {/* Submit button */}
           <button
             type="submit"
-            className="w-full bg-amber-500 hover:bg-amber-600 text-black font-bold py-3 px-4 rounded-lg transition-colors mb-4"
+            disabled={isLoading}
+            className={`w-full bg-amber-500 hover:bg-amber-600 text-black font-bold py-3 px-4 rounded-lg transition-colors mb-4 ${isLoading ? 'opacity-70 cursor-not-allowed' : ''}`}
           >
-            {mode === 'login' ? 'Sign In' : 'Create Account'}
+            {isLoading ? 'Processing...' : mode === 'login' ? 'Sign In' : 'Create Account'}
           </button>
-          
+
           {/* Divider */}
           <div className="flex items-center mb-4">
             <div className="flex-1 border-t border-gray-700"></div>
             <span className="mx-4 text-gray-500 text-sm">OR</span>
             <div className="flex-1 border-t border-gray-700"></div>
           </div>
-          
+
           {/* Google OAuth button */}
           <button
             type="button"
@@ -210,15 +265,15 @@ const AuthModal = ({ isOpen, onClose, initialMode = 'login' }) => {
             </svg>
             <span>Continue with Google</span>
           </button>
-          
+
           {/* Mode toggle */}
           <div className="text-center text-gray-400 text-sm">
             {mode === 'login' ? (
               <>
                 Don't have an account?{' '}
-                <button 
+                <button
                   type="button"
-                  onClick={() => setMode('signup')} 
+                  onClick={() => setMode('signup')}
                   className="text-amber-500 hover:text-amber-400"
                 >
                   Sign up
@@ -227,9 +282,9 @@ const AuthModal = ({ isOpen, onClose, initialMode = 'login' }) => {
             ) : (
               <>
                 Already have an account?{' '}
-                <button 
+                <button
                   type="button"
-                  onClick={() => setMode('login')} 
+                  onClick={() => setMode('login')}
                   className="text-amber-500 hover:text-amber-400"
                 >
                   Sign in
