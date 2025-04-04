@@ -2,14 +2,14 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import axios from 'axios';
-
 import UserNameModal from '@/components/UserNameModal';
 import { useAuthStore } from '@/store/useAuthStore';
 
 export default function Dashboard() {
   const { user, loading, setUser, setLoading, signOut } = useAuthStore();
   const router = useRouter();
-  const [isUserNameSet, setIsUserNameSet] = useState(true);
+  const [isUserNameModalOpen, setIsUserNameModalOpen] = useState(false);
+  const [usernameChecked, setUsernameChecked] = useState(false);
 
   // Load user on mount
   useEffect(() => {
@@ -33,32 +33,45 @@ export default function Dashboard() {
     loadUser();
   }, [setUser, setLoading]);
 
-  // Check if username is set
+  // Fetch username when user is loaded, but only once
   useEffect(() => {
-    const checkUserName = async () => {
+    const getUserName = async () => {
+      // Skip if we already checked the username or the user doesn't have an email
+      if (usernameChecked || !user?.email) {
+        return;
+      }
+
       try {
-        const response = await axios.post('/api/auth/checkUser', {
+        const response = await axios.post('/api/auth/fetchUserName', {
           email: user.email,
         });
-        setIsUserNameSet(response.data.isUserNameSet);
+
+        if (response.data?.username) {
+          console.log("Fetched UserName: ", response.data.username);
+          setUser({
+            ...user,
+            userName: response.data.username,
+          });
+        } else {
+          // If no username is returned, open the modal
+          console.log("No username found, opening modal");
+          setIsUserNameModalOpen(true);
+        }
       } catch (error) {
-        console.error('Error checking username:', error);
+        console.error('Error fetching username:', error);
+        // If there's an error fetching the username, open the modal
+        setIsUserNameModalOpen(true);
+      } finally {
+        // Mark username as checked regardless of the outcome
+        setUsernameChecked(true);
       }
     };
 
-    if (user) checkUserName();
-  }, [user]);
-
-  const refreshUserStatus = async () => {
-    try {
-      const response = await axios.post('/api/auth/checkUser', {
-        email: user.email,
-      });
-      setIsUserNameSet(response.data.isUserNameSet);
-    } catch (error) {
-      console.error('Error refreshing username:', error);
+    // Only fetch username if we have a user with an email and we haven't checked yet
+    if (user && user.email && !usernameChecked) {
+      getUserName();
     }
-  };
+  }, [user, usernameChecked, setUser]);
 
   // Redirect if not authenticated
   useEffect(() => {
@@ -66,6 +79,18 @@ export default function Dashboard() {
       router.push('/?authRequired=true');
     }
   }, [loading, user, router]);
+
+  const handleUserNameModalClose = (username) => {
+    setIsUserNameModalOpen(false);
+    
+    // If username was provided, update the user object
+    if (username) {
+      setUser({
+        ...user,
+        userName: username
+      });
+    }
+  };
 
   if (loading) {
     return (
@@ -80,10 +105,9 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen bg-gray-900">
       <UserNameModal
-        isOpen={!isUserNameSet}
-        onClose={() => refreshUserStatus()}
-        initialMode=''
-        email={user.email}
+        isOpen={isUserNameModalOpen}
+        onClose={handleUserNameModalClose}
+        email={user?.email || ''}
       />
       <header className="bg-black shadow">
         <div className="container mx-auto px-6 py-4 flex justify-between items-center">
@@ -101,14 +125,15 @@ export default function Dashboard() {
                   className="w-10 h-10 rounded-full mr-3"
                 />
               )}
-              <span className="text-white font-medium mr-2">{user.name}</span>
+              <span className="text-white font-medium mr-2">{user?.userName || user?.username || "User"}</span>
             </div>
 
             {/* Logout button */}
             <button
-              onClick={()=>{
+              onClick={() => {
                 signOut();
-                router.push('/');}}
+                router.push('/');
+              }}
               className="bg-gray-800 hover:bg-gray-700 text-white px-4 py-2 rounded-lg transition-colors"
             >
               Sign Out
