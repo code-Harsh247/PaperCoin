@@ -1,5 +1,4 @@
 // File: app/api/auth/updateUsername/route.js
-import { checkIfUserExists } from "@/lib/db-utils";
 import { NextResponse } from "next/server";
 import { updateUserName } from "@/lib/db-utils"; // Assuming this function exists
 
@@ -18,18 +17,6 @@ export async function POST(request) {
   }
 
   try {
-    // Double-check if username is available before updating
-    // const isUserNameUsed = await checkIfUserExists(username);
-    
-    // if (isUserNameUsed) {
-    //   return NextResponse.json(
-    //     { error: 'Username is already taken' }, 
-    //     { status: 409 }
-    //   );
-    // }
-
-    // Update the user's username in the database
-    // Using the provided function as mentioned in your requirements
     await updateUserName(email, username);
     
     return NextResponse.json({ 
