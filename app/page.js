@@ -3,16 +3,22 @@ import React, { useState } from 'react'
 import Link from 'next/link'
 import VideoModal from '@/components/VideoModal'
 import AuthModal from '@/components/AuthModal'
+import { useRouter } from 'next/navigation';
+import {handleAuthRedirect} from '@/lib/auth-client';
 
 function Page() {
+  const router = useRouter()
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [isModalOpen, setIsModalOpen] = useState(false) 
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false)
   const [authModalMode, setAuthModalMode] = useState('login')
 
-  const openSignupModal = () => {
-    setAuthModalMode('signup');
-    setIsAuthModalOpen(true);
+  const openSignupModal = async() => {
+    const isAuthenticated = await handleAuthRedirect(router);
+    if (!isAuthenticated) {
+      setAuthModalMode('signup');
+      setIsAuthModalOpen(true);
+    }
   };
 
 
