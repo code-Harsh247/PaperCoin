@@ -85,6 +85,7 @@ export default function Dashboard() {
 
   // Redirect if not authenticated
   useEffect(() => {
+    console.log("Loading: ", loading, "User: ", user);
     if (!loading && !user) {
       router.push('/?authRequired=true');
     }

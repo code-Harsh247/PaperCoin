@@ -1,15 +1,22 @@
-'use client'
+// Update the imports to include your auth store
 import React, { useState, useEffect } from 'react'
 import { XCircle } from 'lucide-react'
 import axios from 'axios'
+import { useAuthStore } from '@/store/useAuthStore' // Update the path as needed
+import { useRouter } from 'next/navigation'
 
 const AuthModal = ({ isOpen, onClose, initialMode = 'login' }) => {
+  const router = useRouter()
   const [mode, setMode] = useState(initialMode) // 'login' or 'signup'
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [formError, setFormError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  
+  // Get the setUser function from your auth store
+  const setUser = useAuthStore(state => state.setUser)
+  const setLoading = useAuthStore(state => state.setLoading)
   
   // Reset form when modal opens/closes or mode changes
   useEffect(() => {
@@ -85,29 +92,27 @@ const AuthModal = ({ isOpen, onClose, initialMode = 'login' }) => {
         setPassword('')
         setConfirmPassword('')
       } else {
-        // ============================================================
-        // LOGIN API CALL (COMMENTED FOR FUTURE IMPLEMENTATION)
-        // ============================================================
-        /*
-        const response = await axios.post('/api/auth/signIn', {
+        // LOGIN API CALL IMPLEMENTATION
+        const response = await axios.post('/api/auth/login', {
           email: email.trim(),
           password: password.trim()
         })
         
         console.log('Login successful:', response.data)
         
-        // Store user info (you might want to use a more robust solution like context)
-        localStorage.setItem('user', JSON.stringify(response.data.user))
-        localStorage.setItem('token', response.data.token)
+        // Store user info in Zustand store
+        setUser(response.data.user)
         
-        // Close modal and refresh or redirect
-        onClose()
-        // window.location.href = '/dashboard'
-        */
+        // The JWT token is automatically stored in an HTTP-only cookie by the server
+        // No need to manually store it in localStorage
         
-        // Temporary mock successful login for now
-        alert('Login functionality coming soon!')
+        router.push('/auth-success')
+        // Close modal after successful login
         onClose()
+        
+        // You can add a redirect here if needed
+       
+       
       }
     } catch (error) {
       console.error('Authentication error:', error)
