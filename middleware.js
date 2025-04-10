@@ -13,6 +13,7 @@ export async function middleware(request) {
     const token = request.cookies.get('token')?.value;
     
     // If no token exists, redirect to login
+    console.log('Token from middleware:', token);
     if (!token) {
       return NextResponse.redirect(new URL('/?authRequired=true', request.url));
     }

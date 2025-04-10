@@ -1,4 +1,4 @@
-// Author of code is Abhinav Kumar Singh
+// app/api/auth/login/route.js
 import { NextResponse } from "next/server";     
 import { authenticateUser } from "@/lib/db-utils";
 import jwt from "jsonwebtoken";
@@ -43,7 +43,7 @@ export async function POST(request) {
         
         // Set the token in a cookie
         const cookieStore = cookies();
-        cookieStore.set('auth_token', token, {
+        cookieStore.set('token', token, {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production',
             maxAge: 60 * 60 * 24, // 24 hours
@@ -56,7 +56,8 @@ export async function POST(request) {
             message: "Login successful.",
             user: {
                 userId: user.user_id,
-                email: user.email
+                email: user.email,
+                username: user.username
             }
         }, { status: 200 });
     }
