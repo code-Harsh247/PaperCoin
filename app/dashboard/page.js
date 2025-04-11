@@ -16,6 +16,7 @@ import {
   CoinTableRow,
   ActionButton
 } from '@/components/DashboardCards';
+import BitcoinPriceChart from '@/components/BitcoinPriceChart';
 
 export default function Dashboard() {
   const { user, loading, setUser, setLoading, signOut } = useAuthStore();
@@ -84,6 +85,7 @@ export default function Dashboard() {
 
   // Redirect if not authenticated
   useEffect(() => {
+    console.log("Loading: ", loading, "User: ", user);
     if (!loading && !user) {
       router.push('/?authRequired=true');
     }
@@ -195,44 +197,10 @@ export default function Dashboard() {
               />
             </div>
 
-            {/* Portfolio Performance & Top Assets */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
               {/* Portfolio Performance Chart */}
-              <div className="bg-gray-800 rounded-xl shadow-lg p-6 border border-gray-700 lg:col-span-2">
-                <div className="flex justify-between items-center mb-6">
-                  <h2 className="text-xl font-bold text-white">Portfolio Performance</h2>
-                  <div className="flex space-x-2">
-                    <button className="px-3 py-1 text-sm bg-gray-700 text-white rounded-lg">1D</button>
-                    <button className="px-3 py-1 text-sm bg-gray-900 text-white rounded-lg">1W</button>
-                    <button className="px-3 py-1 text-sm bg-gray-900 text-white rounded-lg">1M</button>
-                    <button className="px-3 py-1 text-sm bg-gray-900 text-white rounded-lg">1Y</button>
-                  </div>
-                </div>
-
-                {/* Placeholder for chart - would integrate with an actual chart library */}
-                <div className="h-64 bg-gray-700 bg-opacity-30 rounded-lg flex items-center justify-center">
-                  <span className="text-gray-400">Chart Visualization Here</span>
-                </div>
-
-                <div className="mt-4 grid grid-cols-3 gap-4">
-                  <div className="bg-gray-700 bg-opacity-30 p-3 rounded-lg">
-                    <p className="text-gray-400 text-xs">Today</p>
-                    <p className="text-green-500 font-medium">+$142.35</p>
-                    <p className="text-green-500 text-xs">+2.8%</p>
-                  </div>
-
-                  <div className="bg-gray-700 bg-opacity-30 p-3 rounded-lg">
-                    <p className="text-gray-400 text-xs">This Week</p>
-                    <p className="text-green-500 font-medium">+$267.89</p>
-                    <p className="text-green-500 text-xs">+5.3%</p>
-                  </div>
-
-                  <div className="bg-gray-700 bg-opacity-30 p-3 rounded-lg">
-                    <p className="text-gray-400 text-xs">This Month</p>
-                    <p className="text-red-500 font-medium">-$122.45</p>
-                    <p className="text-red-500 text-xs">-2.4%</p>
-                  </div>
-                </div>
+              <div className="lg:col-span-2">
+                <BitcoinPriceChart />
               </div>
 
               {/* Top Assets */}
