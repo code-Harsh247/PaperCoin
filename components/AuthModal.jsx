@@ -1,21 +1,28 @@
-'use client'
+// Update the imports to include your auth store
 import React, { useState, useEffect } from 'react'
 import { XCircle } from 'lucide-react'
+import axios from 'axios'
+import { useAuthStore } from '@/store/useAuthStore' // Update the path as needed
+import { useRouter } from 'next/navigation'
 
 const AuthModal = ({ isOpen, onClose, initialMode = 'login' }) => {
+  const router = useRouter()
   const [mode, setMode] = useState(initialMode) // 'login' or 'signup'
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
-  const [name, setName] = useState('')
   const [formError, setFormError] = useState('')
+  const [isLoading, setIsLoading] = useState(false)
+  
+  // Get the setUser function from your auth store
+  const setUser = useAuthStore(state => state.setUser)
+  const setLoading = useAuthStore(state => state.setLoading)
   
   // Reset form when modal opens/closes or mode changes
   useEffect(() => {
     setEmail('')
     setPassword('')
     setConfirmPassword('')
-    setName('')
     setFormError('')
   }, [isOpen, mode])
   
@@ -49,17 +56,12 @@ const AuthModal = ({ isOpen, onClose, initialMode = 'login' }) => {
   
   if (!isOpen) return null
   
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
     setFormError('')
     
     if (mode === 'signup') {
       // Validation for signup
-      if (!name.trim()) {
-        setFormError('Name is required')
-        return
-      }
-      
       if (password !== confirmPassword) {
         setFormError('Passwords do not match')
         return
@@ -71,11 +73,58 @@ const AuthModal = ({ isOpen, onClose, initialMode = 'login' }) => {
       return
     }
     
-    // Here you would handle authentication logic
-    console.log('Form submitted:', { mode, email, password, name })
+    setIsLoading(true)
     
-    // Mock successful auth for now
-    onClose()
+    try {
+      if (mode === 'signup') {
+        // Call the signup API
+        const response = await axios.post('/api/auth/signUp', {
+          email: email.trim(),
+          password: password.trim()
+        })
+        
+        console.log('Signup successful:', response.data)
+        
+        // Show success message and switch to login mode
+        alert('Account created successfully! Please log in.')
+        setMode('login')
+        setEmail('')
+        setPassword('')
+        setConfirmPassword('')
+      } else {
+        // LOGIN API CALL IMPLEMENTATION
+        const response = await axios.post('/api/auth/login', {
+          email: email.trim(),
+          password: password.trim()
+        })
+        
+        console.log('Login successful:', response.data)
+        
+        // Store user info in Zustand store
+        setUser(response.data.user)
+        
+        // The JWT token is automatically stored in an HTTP-only cookie by the server
+        // No need to manually store it in localStorage
+        
+        router.push('/auth-success')
+        // Close modal after successful login
+        onClose()
+        
+        // You can add a redirect here if needed
+       
+       
+      }
+    } catch (error) {
+      console.error('Authentication error:', error)
+      
+      // Extract error message from response if available
+      const errorMessage = error.response?.data?.message || 
+                           'Something went wrong. Please try again later.'
+      
+      setFormError(errorMessage)
+    } finally {
+      setIsLoading(false)
+    }
   }
   
   const handleGoogleAuth = () => {
@@ -118,21 +167,6 @@ const AuthModal = ({ isOpen, onClose, initialMode = 'login' }) => {
         
         {/* Auth Form */}
         <form onSubmit={handleSubmit}>
-          {/* Name field - only for signup */}
-          {mode === 'signup' && (
-            <div className="mb-4">
-              <label htmlFor="name" className="block text-gray-300 mb-2 text-sm">Full Name</label>
-              <input
-                id="name"
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
-                placeholder="Enter your name"
-              />
-            </div>
-          )}
-          
           {/* Email field */}
           <div className="mb-4">
             <label htmlFor="email" className="block text-gray-300 mb-2 text-sm">Email</label>
@@ -143,6 +177,7 @@ const AuthModal = ({ isOpen, onClose, initialMode = 'login' }) => {
               onChange={(e) => setEmail(e.target.value)}
               className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
               placeholder="Enter your email"
+              disabled={isLoading}
             />
           </div>
           
@@ -156,6 +191,7 @@ const AuthModal = ({ isOpen, onClose, initialMode = 'login' }) => {
               onChange={(e) => setPassword(e.target.value)}
               className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
               placeholder="Enter your password"
+              disabled={isLoading}
             />
           </div>
           
@@ -170,6 +206,7 @@ const AuthModal = ({ isOpen, onClose, initialMode = 'login' }) => {
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
                 placeholder="Confirm your password"
+                disabled={isLoading}
               />
             </div>
           )}
@@ -184,9 +221,12 @@ const AuthModal = ({ isOpen, onClose, initialMode = 'login' }) => {
           {/* Submit button */}
           <button
             type="submit"
-            className="w-full bg-amber-500 hover:bg-amber-600 text-black font-bold py-3 px-4 rounded-lg transition-colors mb-4"
+            disabled={isLoading}
+            className="w-full bg-amber-500 hover:bg-amber-600 text-black font-bold py-3 px-4 rounded-lg transition-colors mb-4 disabled:opacity-50"
           >
-            {mode === 'login' ? 'Sign In' : 'Create Account'}
+            {isLoading 
+              ? (mode === 'login' ? 'Signing In...' : 'Creating Account...') 
+              : (mode === 'login' ? 'Sign In' : 'Create Account')}
           </button>
           
           {/* Divider */}
@@ -200,7 +240,8 @@ const AuthModal = ({ isOpen, onClose, initialMode = 'login' }) => {
           <button
             type="button"
             onClick={handleGoogleAuth}
-            className="w-full bg-gray-800 hover:bg-gray-700 text-white font-medium py-3 px-4 rounded-lg border border-gray-700 transition-colors flex items-center justify-center gap-2 mb-6"
+            disabled={isLoading}
+            className="w-full bg-gray-800 hover:bg-gray-700 text-white font-medium py-3 px-4 rounded-lg border border-gray-700 transition-colors flex items-center justify-center gap-2 mb-6 disabled:opacity-50"
           >
             <svg width="18" height="18" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
               <path fill="#FFC107" d="M43.611,20.083H42V20H24v8h11.303c-1.649,4.657-6.08,8-11.303,8c-6.627,0-12-5.373-12-12c0-6.627,5.373-12,12-12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C12.955,4,4,12.955,4,24c0,11.045,8.955,20,20,20c11.045,0,20-8.955,20-20C44,22.659,43.862,21.35,43.611,20.083z" />
@@ -220,6 +261,7 @@ const AuthModal = ({ isOpen, onClose, initialMode = 'login' }) => {
                   type="button"
                   onClick={() => setMode('signup')} 
                   className="text-amber-500 hover:text-amber-400"
+                  disabled={isLoading}
                 >
                   Sign up
                 </button>
@@ -231,6 +273,7 @@ const AuthModal = ({ isOpen, onClose, initialMode = 'login' }) => {
                   type="button"
                   onClick={() => setMode('login')} 
                   className="text-amber-500 hover:text-amber-400"
+                  disabled={isLoading}
                 >
                   Sign in
                 </button>
