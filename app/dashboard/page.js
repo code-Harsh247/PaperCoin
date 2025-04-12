@@ -77,6 +77,7 @@ export default function Dashboard() {
 
   // Redirect if not authenticated
   useEffect(() => {
+    console.log("Loading: ", loading, "User: ", user);
     if (!loading && !user) {
       router.push('/?authRequired=true');
     }
@@ -152,7 +153,6 @@ export default function Dashboard() {
               />
             </div>
 
-            {/* Portfolio Performance & Top Assets */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
               {/* Portfolio Performance Chart Component */}
               <PortfolioPerformance />
