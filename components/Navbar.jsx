@@ -77,7 +77,7 @@ export default function Navbar({ user, signOut, router, activeTab, setActiveTab 
   };
 
   return (
-    <header className="bg-gray-800 border-b border-gray-700">
+    <header className="bg-[#111722] border-b border-gray-800">    
       <div className="px-4 py-3 mx-auto">
         <div className="flex items-center justify-between">
           {/* Left side with Logo and Navigation */}
