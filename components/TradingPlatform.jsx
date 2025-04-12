@@ -5,7 +5,7 @@
 import React, { useState } from 'react';
 import TabNavigation from './TabNavigation';
 import OpenOrders from './OpenOrders';
-import OrderHistory from './OrderHistory';
+import OrderHistory from './trading/OrderHistory';
 import Funds from './Funds';
 
 const TradingPlatform = () => {

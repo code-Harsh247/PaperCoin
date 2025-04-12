@@ -1,4 +1,4 @@
-import OrderBookComponent from "@/components/OrderBook";
+import OrderBookComponent from "@/components/OrderBookComponent";
 
 const Page = () => {
   return (

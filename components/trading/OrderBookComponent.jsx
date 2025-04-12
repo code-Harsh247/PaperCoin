@@ -40,7 +40,7 @@ const OrderBookComponent = ({ symb }) => {
       }
 
       // Using depth20 stream for order book
-      const ws = new WebSocket(`wss://stream.binance.com:9443/ws/${symbol.toLowerCase()}@depth20@100ms`);
+      const ws = new WebSocket(`wss://stream.binance.com:9443/ws/${symbol.toLowerCase()}@depth20@1000ms`);
       
       ws.onopen = () => {
         console.log('Order book WebSocket connection established');
@@ -167,8 +167,8 @@ const OrderBookComponent = ({ symb }) => {
   };
 
   return (
-    <div className="bg-gray-900 text-white w-full p-3 max-w-1/5">
-      <div className="p-3 border-b border-gray-800">
+    <div className="bg-[#111722] text-white w-full p-3">
+      <div className="py-3 border-b border-gray-800">
         <h2 className="text-base font-medium">
           Order Book {isLoading ? "(Loading...)" : ""}
           {lastUpdateTime && !isLoading && (
@@ -187,7 +187,7 @@ const OrderBookComponent = ({ symb }) => {
 
       {/* Ask orders (sell orders - red) */}
       <div className="overflow-hidden">
-        {orderBook.asks.slice(0, 13).reverse().map((ask, index) => (
+        {orderBook.asks.slice(0, 10).reverse().map((ask, index) => (
           <div key={`ask-${index}`} className="flex text-xs p-1 hover:bg-gray-800">
             <div className="flex-1 text-red-500">{formatPrice(ask.price)}</div>
             <div className="flex-1">{formatAmount(ask.amount)}</div>
@@ -210,7 +210,7 @@ const OrderBookComponent = ({ symb }) => {
 
       {/* Bid orders (buy orders - green) */}
       <div className="overflow-hidden">
-        {orderBook.bids.slice(0, 13).map((bid, index) => (
+        {orderBook.bids.slice(0, 10).map((bid, index) => (
           <div key={`bid-${index}`} className="flex text-xs p-1 hover:bg-gray-800">
             <div className="flex-1 text-green-400">{formatPrice(bid.price)}</div>
             <div className="flex-1">{formatAmount(bid.amount)}</div>

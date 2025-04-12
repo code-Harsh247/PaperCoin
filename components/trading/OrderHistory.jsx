@@ -44,7 +44,7 @@ const OrderHistory = () => {
 
   return (
     <div>
-      <div className="w-full overflow-x-auto">
+      <div className="w-full overflow-x-auto bg-[#111722]">
         <table className="w-full">
           <thead>
             <tr>
