@@ -1,5 +1,5 @@
 'use client'
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useOrderbook } from '@/Context/OrderBookContext';
 
 const OrderBookComponent = () => {
@@ -7,20 +7,66 @@ const OrderBookComponent = () => {
   const [maxTotal, setMaxTotal] = useState(0);
   const [displayMode, setDisplayMode] = useState('combined'); // 'combined', 'real', 'virtual'
 
+  // Calculate totals for an array of orders
+  const calculateTotals = (orders) => {
+    let runningTotal = 0;
+    return orders.map(order => {
+      runningTotal += parseFloat(order.amount);
+      return { ...order, total: runningTotal.toString() };
+    });
+  };
+
+  // Determine which data to display based on displayMode
+  const displayData = useMemo(() => {
+    if (displayMode === 'combined') {
+      return orderbook;
+    } else if (displayMode === 'real') {
+      // For real orders, use rawOrderbook and calculate totals
+      const bidsWithTotals = calculateTotals(
+        rawOrderbook.bids.map(bid => ({ ...bid, isVirtual: false }))
+      );
+      
+      const asksWithTotals = calculateTotals(
+        rawOrderbook.asks.map(ask => ({ ...ask, isVirtual: false }))
+      );
+      
+      return {
+        bids: bidsWithTotals,
+        asks: asksWithTotals
+      };
+    } else if (displayMode === 'virtual') {
+      // For virtual orders, calculate totals for virtual orders
+      const bidsWithTotals = calculateTotals(
+        virtualOrders.bids.map(bid => ({ ...bid, isVirtual: true }))
+      );
+      
+      const asksWithTotals = calculateTotals(
+        virtualOrders.asks.map(ask => ({ ...ask, isVirtual: true }))
+      );
+      
+      return {
+        bids: bidsWithTotals,
+        asks: asksWithTotals
+      };
+    }
+    
+    return { bids: [], asks: [] };
+  }, [displayMode, orderbook, rawOrderbook, virtualOrders]);
+
   // Find the maximum total value for scaling
   useEffect(() => {
-    if (orderbook.bids.length === 0 && orderbook.asks.length === 0) return;
+    if (displayData.bids.length === 0 && displayData.asks.length === 0) return;
     
-    const maxBidTotal = orderbook.bids.length > 0 
-      ? parseFloat(orderbook.bids[orderbook.bids.length - 1].total)
+    const maxBidTotal = displayData.bids.length > 0 
+      ? parseFloat(displayData.bids[displayData.bids.length - 1].total)
       : 0;
       
-    const maxAskTotal = orderbook.asks.length > 0 
-      ? parseFloat(orderbook.asks[orderbook.asks.length - 1].total)
+    const maxAskTotal = displayData.asks.length > 0 
+      ? parseFloat(displayData.asks[displayData.asks.length - 1].total)
       : 0;
       
     setMaxTotal(Math.max(maxBidTotal, maxAskTotal));
-  }, [orderbook]);
+  }, [displayData]);
 
   // Format price to consistent decimal places
   const formatPrice = (price) => {
@@ -46,10 +92,10 @@ const OrderBookComponent = () => {
 
   // Current spread calculation
   const calculateSpread = () => {
-    if (orderbook.asks.length === 0 || orderbook.bids.length === 0) return null;
+    if (displayData.asks.length === 0 || displayData.bids.length === 0) return null;
     
-    const lowestAsk = parseFloat(orderbook.asks[0].price);
-    const highestBid = parseFloat(orderbook.bids[0].price);
+    const lowestAsk = parseFloat(displayData.asks[0].price);
+    const highestBid = parseFloat(displayData.bids[0].price);
     const spread = lowestAsk - highestBid;
     const spreadPercentage = (spread / lowestAsk) * 100;
     
@@ -99,13 +145,7 @@ const OrderBookComponent = () => {
 
       {/* Asks (Sell Orders) - Reversed to show highest price at top */}
       <div className="max-h-60 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-700">
-        {orderbook.asks
-          .filter(ask => {
-            if (displayMode === 'combined') return true;
-            if (displayMode === 'real') return !ask.isVirtual;
-            if (displayMode === 'virtual') return ask.isVirtual;
-            return true;
-          })
+        {displayData.asks
           .slice()
           .reverse()
           .map((ask, index) => (
@@ -152,13 +192,7 @@ const OrderBookComponent = () => {
 
       {/* Bids (Buy Orders) */}
       <div className="max-h-60 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-700">
-        {orderbook.bids
-          .filter(bid => {
-            if (displayMode === 'combined') return true;
-            if (displayMode === 'real') return !bid.isVirtual;
-            if (displayMode === 'virtual') return bid.isVirtual;
-            return true;
-          })
+        {displayData.bids
           .map((bid, index) => (
             <div 
               key={`bid-${bid.price}-${index}`} 
@@ -196,6 +230,5 @@ const OrderBookComponent = () => {
     </div>
   );
 };
-
 
 export default OrderBookComponent;

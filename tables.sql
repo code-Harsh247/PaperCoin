@@ -57,3 +57,23 @@ CREATE TABLE user_portfolios (
 -- Add sample data for user_id 49
 INSERT INTO user_portfolios (user_id, total_balance, total_invested, available_funds) 
 VALUES (49, 10000.00, 5230.45, 4769.55);
+
+
+CREATE TABLE user_trades (
+    id SERIAL PRIMARY KEY,
+    user_id TEXT NOT NULL,                -- User identifier
+    trade_type TEXT NOT NULL,             -- 'bid' or 'ask'
+    symbol TEXT NOT NULL,                 -- Trading pair e.g. 'BTCUSDT'
+    price DECIMAL(18,8) NOT NULL,         -- Order price
+    amount DECIMAL(18,8) NOT NULL,        -- Order amount
+    filled_amount DECIMAL(18,8) DEFAULT 0,-- Amount already filled
+    status TEXT NOT NULL,                 -- 'open', 'filled', 'canceled', 'partial'
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Create a hypertable for time-series optimization
+SELECT create_hypertable('user_trades', 'created_at');
+
+-- Index for frequent queries
+CREATE INDEX idx_user_trades_user_symbol_status ON user_trades(user_id, symbol, status);
