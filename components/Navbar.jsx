@@ -1,24 +1,26 @@
-'use client';
-import { useState, useEffect } from 'react';
-import Link from 'next/link';
-import { 
-  Menu, 
-  Bell, 
-  Settings, 
-  Search, 
-  LogOut, 
-  Menu as MenuIcon, 
-  Home, 
-  BarChart2, 
-  Wallet, 
-  History, 
-  Heart, 
-  HelpCircle, 
+"use client";
+import { useState, useEffect } from "react";
+import Link from "next/link";
+import { useAuthStore } from "@/store/useAuthStore";
+import router from "next/router";
+import {
+  Menu,
+  Bell,
+  Settings,
+  Search,
+  LogOut,
+  Menu as MenuIcon,
+  Home,
+  BarChart2,
+  Wallet,
+  History,
+  Heart,
+  HelpCircle,
   TrendingUp,
-  Users
-} from 'lucide-react';
+  Users,
+} from "lucide-react";
 
-export default function Navbar({ user, signOut, router, activeTab, setActiveTab }) {
+export default function Navbar({ user, activeTab, setActiveTab }) {
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -37,36 +39,45 @@ export default function Navbar({ user, signOut, router, activeTab, setActiveTab 
     setIsMobileMenuOpen(!isMobileMenuOpen);
   };
 
+  const { signOut } = useAuthStore();
+
   const handleSignOut = async () => {
-    if (signOut) {
-      await signOut();
-      if (router) router.push('/');
+    try {
+      // if (signOut) {
+      await signOut(); // Call the sign-out function
+      router.push("/"); // Redirect to the home page
+      // }
+    } catch (error) {
+      console.error("Error signing out:", error);
     }
   };
-
   // Close mobile menu when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
-      const mobileMenu = document.getElementById('mobile-menu');
-      if (mobileMenu && !mobileMenu.contains(event.target) && !event.target.closest('button[aria-label="Toggle mobile menu"]')) {
+      const mobileMenu = document.getElementById("mobile-menu");
+      if (
+        mobileMenu &&
+        !mobileMenu.contains(event.target) &&
+        !event.target.closest('button[aria-label="Toggle mobile menu"]')
+      ) {
         setIsMobileMenuOpen(false);
       }
     };
 
-    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener("mousedown", handleClickOutside);
     return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener("mousedown", handleClickOutside);
     };
   }, []);
 
   // Navigation items - same as what was in sidebar
   const navItems = [
-    { name: 'Dashboard', icon: Home, path: '/dashboard', id: 'dashboard' },
-    { name: 'Markets', icon: BarChart2, path: '/markets', id: 'markets' },
-    { name: 'Trading', icon: TrendingUp, path: '/trading', id: 'trading' },
-    { name: 'Wallet', icon: Wallet, path: '/wallet', id: 'wallet' },
-    { name: 'History', icon: History, path: '/history', id: 'history' },
-    { name: 'Watchlist', icon: Heart, path: '/watchlist', id: 'watchlist' },
+    { name: "Dashboard", icon: Home, path: "/dashboard", id: "dashboard" },
+    { name: "Markets", icon: BarChart2, path: "/markets", id: "markets" },
+    { name: "Trading", icon: TrendingUp, path: "/trading", id: "trading" },
+    { name: "Wallet", icon: Wallet, path: "/wallet", id: "wallet" },
+    { name: "History", icon: History, path: "/history", id: "history" },
+    { name: "Watchlist", icon: Heart, path: "/watchlist", id: "watchlist" },
   ];
 
   const handleNavClick = (id) => {
@@ -77,7 +88,7 @@ export default function Navbar({ user, signOut, router, activeTab, setActiveTab 
   };
 
   return (
-    <header className="bg-[#111722] border-b border-gray-800">    
+    <header className="bg-[#111722] border-b border-gray-800">
       <div className="px-4 py-3 mx-auto">
         <div className="flex items-center justify-between">
           {/* Left side with Logo and Navigation */}
@@ -85,7 +96,12 @@ export default function Navbar({ user, signOut, router, activeTab, setActiveTab 
             {/* Logo */}
             <Link href="/dashboard" className="flex items-center mr-8">
               <div className="text-amber-500 h-9 w-9 mr-2 flex items-center justify-center rounded-full bg-amber-500 bg-opacity-20">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                  className="w-5 h-5"
+                >
                   <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path>
                 </svg>
               </div>
@@ -99,7 +115,9 @@ export default function Navbar({ user, signOut, router, activeTab, setActiveTab 
                   key={item.id}
                   href={item.path}
                   className={`flex items-center text-sm font-medium ${
-                    activeTab === item.id ? 'text-amber-500' : 'text-gray-300 hover:text-white'
+                    activeTab === item.id
+                      ? "text-amber-500"
+                      : "text-gray-300 hover:text-white"
                   }`}
                   onClick={() => handleNavClick(item.id)}
                 >
@@ -112,7 +130,7 @@ export default function Navbar({ user, signOut, router, activeTab, setActiveTab 
 
           {/* Hamburger menu button (visible on mobile only) */}
           <div className="block lg:hidden">
-            <button 
+            <button
               onClick={toggleMobileMenu}
               className="p-2 text-gray-400 hover:text-white focus:outline-none"
               aria-label="Toggle mobile menu"
@@ -155,24 +173,37 @@ export default function Navbar({ user, signOut, router, activeTab, setActiveTab 
                     <div className="p-4 border-b border-gray-700 hover:bg-gray-700">
                       <div className="flex">
                         <div className="ml-3">
-                          <p className="text-sm text-white">Your deposit of $500 has been confirmed.</p>
-                          <p className="text-xs text-gray-400 mt-1">2 hours ago</p>
+                          <p className="text-sm text-white">
+                            Your deposit of $500 has been confirmed.
+                          </p>
+                          <p className="text-xs text-gray-400 mt-1">
+                            2 hours ago
+                          </p>
                         </div>
                       </div>
                     </div>
                     <div className="p-4 border-b border-gray-700 hover:bg-gray-700">
                       <div className="flex">
                         <div className="ml-3">
-                          <p className="text-sm text-white">Bitcoin is up 5% today.</p>
-                          <p className="text-xs text-gray-400 mt-1">5 hours ago</p>
+                          <p className="text-sm text-white">
+                            Bitcoin is up 5% today.
+                          </p>
+                          <p className="text-xs text-gray-400 mt-1">
+                            5 hours ago
+                          </p>
                         </div>
                       </div>
                     </div>
                     <div className="p-4 hover:bg-gray-700">
                       <div className="flex">
                         <div className="ml-3">
-                          <p className="text-sm text-white">New feature alert: Portfolio Analytics is now available.</p>
-                          <p className="text-xs text-gray-400 mt-1">1 day ago</p>
+                          <p className="text-sm text-white">
+                            New feature alert: Portfolio Analytics is now
+                            available.
+                          </p>
+                          <p className="text-xs text-gray-400 mt-1">
+                            1 day ago
+                          </p>
                         </div>
                       </div>
                     </div>
@@ -201,7 +232,9 @@ export default function Navbar({ user, signOut, router, activeTab, setActiveTab 
                 className="flex items-center text-sm focus:outline-none"
               >
                 <div className="h-8 w-8 rounded-full bg-gray-600 flex items-center justify-center text-white">
-                  {user?.userName?.[0]?.toUpperCase() || user?.email?.[0]?.toUpperCase() || "U"}
+                  {user?.userName?.[0]?.toUpperCase() ||
+                    user?.email?.[0]?.toUpperCase() ||
+                    "U"}
                 </div>
               </button>
 
@@ -210,8 +243,12 @@ export default function Navbar({ user, signOut, router, activeTab, setActiveTab 
                 <div className="absolute right-0 mt-2 w-48 rounded-lg shadow-lg bg-gray-800 ring-1 ring-black ring-opacity-5 z-50 border border-gray-700">
                   <div className="py-1">
                     <div className="px-4 py-2 border-b border-gray-700">
-                      <p className="text-sm text-white truncate">{user?.userName || user?.email}</p>
-                      <p className="text-xs text-gray-400 truncate">{user?.email}</p>
+                      <p className="text-sm text-white truncate">
+                        {user?.userName || user?.email}
+                      </p>
+                      <p className="text-xs text-gray-400 truncate">
+                        {user?.email}
+                      </p>
                     </div>
                     <Link
                       href="/profile"
@@ -262,22 +299,28 @@ export default function Navbar({ user, signOut, router, activeTab, setActiveTab 
 
       {/* Mobile Menu (slide-in from left) */}
       {isMobileMenuOpen && (
-        <div 
-          id="mobile-menu"
-          className="fixed inset-0 z-50 lg:hidden"
-        >
-          <div className="absolute inset-0 bg-gray-900 bg-opacity-75" onClick={toggleMobileMenu}></div>
+        <div id="mobile-menu" className="fixed inset-0 z-50 lg:hidden">
+          <div
+            className="absolute inset-0 bg-gray-900 bg-opacity-75"
+            onClick={toggleMobileMenu}
+          ></div>
           <div className="absolute inset-y-0 left-0 max-w-xs w-full bg-gray-800 shadow-xl">
             <div className="flex flex-col h-full">
               {/* User profile section */}
               <div className="p-4 border-b border-gray-700">
                 <div className="flex items-center space-x-3">
                   <div className="h-10 w-10 rounded-full bg-gray-600 flex items-center justify-center text-white">
-                    {user?.userName?.[0]?.toUpperCase() || user?.email?.[0]?.toUpperCase() || "U"}
+                    {user?.userName?.[0]?.toUpperCase() ||
+                      user?.email?.[0]?.toUpperCase() ||
+                      "U"}
                   </div>
                   <div>
-                    <div className="text-white font-medium">{user?.userName || "User"}</div>
-                    <div className="text-gray-400 text-sm truncate">{user?.email}</div>
+                    <div className="text-white font-medium">
+                      {user?.userName || "User"}
+                    </div>
+                    <div className="text-gray-400 text-sm truncate">
+                      {user?.email}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -291,8 +334,8 @@ export default function Navbar({ user, signOut, router, activeTab, setActiveTab 
                       href={item.path}
                       className={`flex items-center px-4 py-3 text-sm font-medium rounded-lg ${
                         activeTab === item.id
-                          ? 'bg-gray-700 text-amber-500'
-                          : 'text-gray-300 hover:bg-gray-700 hover:text-white'
+                          ? "bg-gray-700 text-amber-500"
+                          : "text-gray-300 hover:bg-gray-700 hover:text-white"
                       }`}
                       onClick={() => handleNavClick(item.id)}
                     >

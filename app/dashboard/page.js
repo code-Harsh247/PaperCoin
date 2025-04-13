@@ -3,8 +3,9 @@ import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import axios from 'axios';
 import UserNameModal from '@/components/UserNameModal';
+import AddFundsModal from '@/components/dashboard/AddFundsModal';
 import { useAuthStore } from '@/store/useAuthStore';
-import { Wallet, TrendingUp, Eye, PieChart } from 'lucide-react';
+import { Wallet, TrendingUp, Eye, PieChart, CheckCircle, XCircle, Info, AlertCircle } from 'lucide-react';
 // Import our custom components
 import { BalanceCard } from '@/components/DashboardCards';
 
@@ -15,12 +16,97 @@ import MarketOverview from '@/components/dashboard/MarketOverview';
 import RecentActivity from '@/components/dashboard/RecentActivity';
 import QuickActions from '@/components/dashboard/QuickActions';
 
+// Simple Toast Component
+const Toast = ({ message, type = 'success', onClose }) => {
+  const Icon = type === 'success' ? CheckCircle : 
+               type === 'error' ? AlertCircle : 
+               type === 'info' ? Info : 
+               AlertCircle;
+  
+  const bgColor = type === 'success' ? 'from-green-500/20 to-green-600/20 border-green-500/30' : 
+                  type === 'error' ? 'from-red-500/20 to-red-600/20 border-red-500/30' : 
+                  type === 'info' ? 'from-blue-500/20 to-blue-600/20 border-blue-500/30' : 
+                  'from-amber-500/20 to-amber-600/20 border-amber-500/30';
+  
+  const iconColor = type === 'success' ? 'text-green-500' : 
+                   type === 'error' ? 'text-red-500' : 
+                   type === 'info' ? 'text-blue-500' : 
+                   'text-amber-500';
+              
+  return (
+    <div className={`fixed top-4 right-4 z-50 bg-gradient-to-r ${bgColor} border rounded-lg p-4 shadow-lg w-72 transform transition-all duration-300 animate-fadeIn`}>
+      <div className="flex items-start">
+        <div className={`${iconColor} mr-3`}>
+          <Icon size={20} />
+        </div>
+        <div className="flex-1">
+          <p className="text-white text-sm">{message}</p>
+        </div>
+        <button 
+          onClick={onClose}
+          className="text-gray-400 hover:text-white"
+        >
+          <XCircle size={16} />
+        </button>
+      </div>
+    </div>
+  );
+};
+
+// Highlight Banner Component for Dashboard
+const HighlightBanner = ({ amount, onClose }) => {
+  return (
+    <div className="bg-gradient-to-r from-green-500/10 to-green-600/10 border border-green-500/30 rounded-xl p-4 mb-6 animate-fadeIn flex items-center justify-between">
+      <div className="flex items-center">
+        <div className="bg-green-500/20 p-2 rounded-full mr-3">
+          <CheckCircle size={20} className="text-green-500" />
+        </div>
+        <div>
+          <p className="text-white font-medium">Funds Added Successfully</p>
+          <p className="text-gray-300 text-sm">
+            {typeof amount === 'number' 
+              ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount) 
+              : amount} has been added to your account
+          </p>
+        </div>
+      </div>
+      <button 
+        onClick={onClose}
+        className="text-gray-400 hover:text-white"
+      >
+        <XCircle size={16} />
+      </button>
+    </div>
+  );
+};
+
 export default function Dashboard() {
   const { user, loading, setUser, setLoading, signOut } = useAuthStore();
   const router = useRouter();
   const [isUserNameModalOpen, setIsUserNameModalOpen] = useState(false);
+  const [isAddFundsModalOpen, setIsAddFundsModalOpen] = useState(false);
   const [usernameChecked, setUsernameChecked] = useState(false);
+  const [dashboardData, setDashboardData] = useState(null);
+  const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [isDataLoading, setIsDataLoading] = useState(true);
+  
+  // Toast notification
+  const [toastConfig, setToastConfig] = useState({ visible: false, message: '', type: 'success' });
+  
+  // Success highlight banner
+  const [showSuccessBanner, setShowSuccessBanner] = useState(false);
+  const [addedAmount, setAddedAmount] = useState(null);
+  
+  // Show toast notification
+  const showToast = (message, type = 'success') => {
+    setToastConfig({ visible: true, message, type });
+    
+    // Auto-hide after 4 seconds
+    setTimeout(() => {
+      setToastConfig(prev => ({ ...prev, visible: false }));
+    }, 1000);
+  };
 
   // Load user on mount
   useEffect(() => {
@@ -83,6 +169,49 @@ export default function Dashboard() {
     }
   }, [loading, user, router]);
 
+  // Fetch Users portfolio data
+  useEffect(() => {
+    async function fetchDashboardData() {
+      try {
+        setIsDataLoading(true);
+        console.log(user)
+        const response = await axios.post('/api/weeklySnapshots',
+          {
+            email: user.email,
+          }
+        );
+        setDashboardData(response.data.dashboard);
+      } catch (err) {
+        console.error('Error fetching dashboard data:', err);
+        setError(err.response?.data?.error || 'Failed to fetch dashboard data');
+      } finally {
+        setIsDataLoading(false);
+      }
+    };
+
+    if (user?.email) {
+      fetchDashboardData();
+    }
+  }, [user]);
+
+  // Auto-hide success banner after 8 seconds
+  useEffect(() => {
+    if (showSuccessBanner) {
+      const timer = setTimeout(() => {
+        setShowSuccessBanner(false);
+      }, 1000);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [showSuccessBanner]);
+
+  const formatCurrency = (value) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD'
+    }).format(value);
+  };
+
   const handleUserNameModalClose = (username) => {
     setIsUserNameModalOpen(false);
     if (username) {
@@ -90,6 +219,35 @@ export default function Dashboard() {
         ...user,
         userName: username
       });
+    }
+  };
+
+  const handleAddFundsSuccess = (amount) => {
+    // Refresh dashboard data after adding funds
+    if (user?.email) {
+      fetchDashboardData();
+    }
+    
+    // Show success toast notification
+    showToast(`$${amount.toFixed(2)} added successfully to your account!`, 'success');
+    
+    // Show highlight banner
+    setAddedAmount(amount);
+    setShowSuccessBanner(true);
+  };
+
+  const fetchDashboardData = async () => {
+    try {
+      setIsDataLoading(true);
+      const response = await axios.post('/api/weeklySnapshots', {
+        email: user.email,
+      });
+      setDashboardData(response.data.dashboard);
+    } catch (err) {
+      console.error('Error fetching dashboard data:', err);
+      setError(err.response?.data?.error || 'Failed to fetch dashboard data');
+    } finally {
+      setIsDataLoading(false);
     }
   };
 
@@ -105,11 +263,27 @@ export default function Dashboard() {
 
   return (
     <div className="flex h-screen bg-gray-900 overflow-hidden">
+      {/* Toast Notification */}
+      {toastConfig.visible && (
+        <Toast 
+          message={toastConfig.message} 
+          type={toastConfig.type} 
+          onClose={() => setToastConfig(prev => ({ ...prev, visible: false }))}
+        />
+      )}
+      
       {/* User name modal */}
       <UserNameModal
         isOpen={isUserNameModalOpen}
         onClose={handleUserNameModalClose}
         email={user?.email || ''}
+      />
+
+      {/* Add Funds Modal */}
+      <AddFundsModal
+        isOpen={isAddFundsModalOpen}
+        onClose={() => setIsAddFundsModalOpen(false)}
+        onSuccess={handleAddFundsSuccess}
       />
 
       {/* Main Content */}
@@ -121,57 +295,87 @@ export default function Dashboard() {
               <h1 className="text-2xl font-bold text-white">Welcome back, {user?.userName || user?.username || "User"}</h1>
               <p className="text-gray-400">Here's what's happening with your assets today.</p>
             </div>
+            
+            {/* Success Banner */}
+            {showSuccessBanner && (
+              <HighlightBanner 
+                amount={addedAmount} 
+                onClose={() => setShowSuccessBanner(false)} 
+              />
+            )}
 
             {/* Dashboard Summary Cards */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-              <BalanceCard
-                title="Total Balance"
-                amount="$10,000.00"
-                changePercentage={2.5}
-                changeLabel="from yesterday"
-                iconBg="bg-amber-500"
-                icon={Wallet}
-                ctaText="View Details"
-              />
-              <BalanceCard
-                title="Total Invested"
-                amount="$5,230.45"
-                changePercentage={3.2}
-                changeLabel="this week"
-                iconBg="bg-blue-500"
-                icon={TrendingUp}
-                ctaText="View Details"
-              />
-              <BalanceCard
-                title="Available Funds"
-                amount="$4,769.55"
-                changePercentage={-1.8}
-                changeLabel="this week"
-                iconBg="bg-purple-500"
-                icon={Wallet}
-                showAddFunds={true}
-              />
-            </div>
+            {isDataLoading ? (
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+                <div className="bg-gray-800 rounded-lg p-6 animate-pulse h-32"></div>
+                <div className="bg-gray-800 rounded-lg p-6 animate-pulse h-32"></div>
+                <div className="bg-gray-800 rounded-lg p-6 animate-pulse h-32"></div>
+              </div>
+            ) : dashboardData ? (
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+                <BalanceCard
+                  title="Total Balance"
+                  amount={formatCurrency(dashboardData.total_balance)}
+                  changePercentage={parseFloat(dashboardData.weekly_balance_change_pct)}
+                  changeLabel="this week"
+                  iconBg="bg-amber-500"
+                  icon={Wallet}
+                  ctaText="View Details"
+                  onCtaClick={() => console.log("View total balance details")}
+                />
+                <BalanceCard
+                  title="Total Invested"
+                  amount={formatCurrency(dashboardData.total_invested)}
+                  changePercentage={parseFloat(dashboardData.weekly_invested_change_pct)}
+                  changeLabel="this week"
+                  iconBg="bg-blue-500"
+                  icon={TrendingUp}
+                  ctaText="View Details"
+                  showBitcoinCount={true}
+                  bitcoinCount={parseFloat(dashboardData.btc_coins)}
+                  onCtaClick={() => console.log("View invested details")}
+                />
+                
+                <BalanceCard
+                  title="Available Funds"
+                  amount={formatCurrency(dashboardData.available_funds)}
+                  changePercentage={parseFloat(dashboardData.weekly_available_change_pct)}
+                  changeLabel="this week"
+                  iconBg="bg-purple-500"
+                  icon={Wallet}
+                  showAddFunds={true}
+                  onCtaClick={() => setIsAddFundsModalOpen(true)}
+                />
+              </div>
+            ) : (
+              <div className="bg-red-800 text-white p-4 rounded-lg mb-8">
+                <p>{error || "Failed to load dashboard data. Please try again later."}</p>
+              </div>
+            )}
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-              {/* Portfolio Performance Chart Component */}
-              <PortfolioPerformance />
-              
-              {/* Top Assets Component */}
-              <TopAssets />
-            </div>
+            {!isDataLoading && dashboardData && (
+              <>
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+                  {/* Portfolio Performance Chart Component */}
+                  <PortfolioPerformance />
+                  
+                  {/* Top Assets Component */}
+                  <TopAssets />
+                </div>
 
-            {/* Market Overview Component */}
-            <MarketOverview />
+                {/* Market Overview Component */}
+                <MarketOverview />
 
-            {/* Recent Activity & Quick Actions */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Recent Activity Component */}
-              <RecentActivity />
-              
-              {/* Quick Actions Component */}
-              <QuickActions />
-            </div>
+                {/* Recent Activity & Quick Actions */}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                  {/* Recent Activity Component */}
+                  <RecentActivity />
+                  
+                  {/* Quick Actions Component */}
+                  <QuickActions onAddFunds={() => setIsAddFundsModalOpen(true)} />
+                </div>
+              </>
+            )}
           </div>
         </main>
       </div>

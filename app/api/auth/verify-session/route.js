@@ -36,7 +36,7 @@ export async function GET() {
     
     // Clear the invalid token
     const cookieStore = cookies();
-    cookieStore.delete('auth_token');
+    cookieStore.delete('token');
     
     return NextResponse.json({
       isAuthenticated: false,
