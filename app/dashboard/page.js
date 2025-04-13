@@ -15,6 +15,7 @@ import MarketOverview from '@/components/dashboard/MarketOverview';
 import RecentActivity from '@/components/dashboard/RecentActivity';
 import QuickActions from '@/components/dashboard/QuickActions';
 
+
 export default function Dashboard() {
   const { user, loading, setUser, setLoading, signOut } = useAuthStore();
   const router = useRouter();
