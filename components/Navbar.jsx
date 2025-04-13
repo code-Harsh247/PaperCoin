@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useAuthStore } from "@/store/useAuthStore";
-import router from "next/router";
+import { useRouter } from 'next/navigation'
 import {
   Menu,
   Bell,
@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 
 export default function Navbar({ user, activeTab, setActiveTab }) {
+  const router = useRouter()
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
