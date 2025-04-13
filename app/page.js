@@ -5,6 +5,7 @@ import VideoModal from '@/components/VideoModal'
 import AuthModal from '@/components/AuthModal'
 import { useRouter } from 'next/navigation';
 import {handleAuthRedirect} from '@/lib/auth-client';
+import AddFundsModal from '@/components/dashboard/AddFundsModal'
 
 function Page() {
   const router = useRouter()
@@ -67,6 +68,7 @@ function Page() {
 
   return (
     <div className="relative h-screen w-screen overflow-x-hidden bg-black select-none">
+      <AddFundsModal/>
       <VideoModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
       <AuthModal 
         isOpen={isAuthModalOpen} 
