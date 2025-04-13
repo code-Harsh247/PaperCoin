@@ -13,16 +13,22 @@ function Page() {
   const [isModalOpen, setIsModalOpen] = useState(false) 
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false)
   const [authModalMode, setAuthModalMode] = useState('login')
+  const [isLoading, setIsLoading] = useState(false) // New state for loading
 
   const openSignupModal = async() => {
-    const isAuthenticated = await handleAuthRedirect(router);
-    if (!isAuthenticated) {
-      setAuthModalMode('signup');
-      setIsAuthModalOpen(true);
+    setIsLoading(true); // Start loading
+    try {
+      const isAuthenticated = await handleAuthRedirect(router);
+      if (!isAuthenticated) {
+        setAuthModalMode('signup');
+        setIsAuthModalOpen(true);
+      }
+    } catch (error) {
+      console.error("Authentication error:", error);
+    } finally {
+      setIsLoading(false); // Stop loading regardless of outcome
     }
   };
-
-
 
   const features = [
     {
@@ -65,6 +71,14 @@ function Page() {
       window.history.pushState(null, '', `#${id}`);
     }
   };
+
+  // Loading spinner component
+  const LoadingSpinner = () => (
+    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-black" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+    </svg>
+  );
 
   return (
     <div className="relative h-screen w-screen overflow-x-hidden bg-black select-none">
@@ -136,7 +150,20 @@ function Page() {
 
           {/* Login/Signup Buttons */}
           <div className="hidden md:flex items-center space-x-4">
-            <button className="bg-amber-500 hover:bg-amber-600 text-black font-bold py-2 px-4 rounded-lg transition-colors" onClick={openSignupModal}>Get Started</button>
+            <button 
+              className="bg-amber-500 hover:bg-amber-600 text-black font-bold py-2 px-4 rounded-lg transition-colors flex items-center justify-center" 
+              onClick={openSignupModal}
+              disabled={isLoading}
+            >
+              {isLoading ? (
+                <>
+                  <LoadingSpinner />
+                  <span>Loading...</span>
+                </>
+              ) : (
+                "Get Started"
+              )}
+            </button>
           </div>
         </div>
       </nav>
@@ -165,8 +192,19 @@ function Page() {
           </p>
 
           <div className="mt-8 md:mt-10 flex flex-col sm:flex-row space-y-4 sm:space-y-0 sm:space-x-4">
-            <button className="bg-amber-500 hover:bg-amber-600 text-black font-bold py-3 px-8 md:px-10 rounded-lg text-lg transition-colors" onClick={openSignupModal}>
-              Start Trading
+            <button 
+              className="bg-amber-500 hover:bg-amber-600 text-black font-bold py-3 px-8 md:px-10 rounded-lg text-lg transition-colors flex items-center justify-center" 
+              onClick={openSignupModal}
+              disabled={isLoading}
+            >
+              {isLoading ? (
+                <>
+                  <LoadingSpinner />
+                  <span>Loading...</span>
+                </>
+              ) : (
+                "Start Trading"
+              )}
             </button>
             <button className="border border-gray-600 hover:border-gray-400 text-white font-bold py-3 px-8 md:px-10 rounded-lg text-lg transition-colors" onClick={handleWatchDemo}>
               Watch Demo
@@ -221,8 +259,19 @@ function Page() {
           </div>
 
           <div className="mt-16 text-center">
-            <button className="bg-amber-500 hover:bg-amber-600 text-black font-bold py-3 px-10 rounded-lg text-lg transition-colors">
-              Explore Features
+            <button 
+              className="bg-amber-500 hover:bg-amber-600 text-black font-bold py-3 px-10 rounded-lg text-lg transition-colors flex items-center justify-center mx-auto" 
+              onClick={openSignupModal}
+              disabled={isLoading}
+            >
+              {isLoading ? (
+                <>
+                  <LoadingSpinner />
+                  <span>Loading...</span>
+                </>
+              ) : (
+                "Explore Features"
+              )}
             </button>
           </div>
         </div>
@@ -286,7 +335,7 @@ function Page() {
                 </div>
               </div>
               <p className="text-gray-400">
-                "Bruh, Papercoin got me feeling like a crypto king even though I’m literally just pretending. But fr, I’m out here losing fake money and calling it a ‘strategic loss. Still slaps tho, ngl"
+                "Bruh, Papercoin got me feeling like a crypto king even though I'm literally just pretending. But fr, I'm out here losing fake money and calling it a 'strategic loss. Still slaps tho, ngl"
               </p>
               <div className="flex text-amber-500 mt-4">
                 ★★★★★
@@ -302,7 +351,7 @@ function Page() {
                 </div>
               </div>
               <p className="text-gray-400">
-                "Honestly, I’m only on Papercoin ‘cause you made me, and now I’m over here pretending every trade is a flex. Losing fake crypto is lowkey more fun than my real life right now, ngl."
+                "Honestly, I'm only on Papercoin 'cause you made me, and now I'm over here pretending every trade is a flex. Losing fake crypto is lowkey more fun than my real life right now, ngl."
               </p>
               <div className="flex text-amber-500 mt-4">
                 ★★★★★
@@ -318,7 +367,7 @@ function Page() {
                 </div>
               </div>
               <p className="text-gray-400">
-                "Okay, I didn’t wanna do this, but now I’m lowkey obsessed with Papercoin. My fake trades are crashing harder than my Wi-Fi, and I’m just here like ‘yep, I’m a trader now."
+                "Okay, I didn't wanna do this, but now I'm lowkey obsessed with Papercoin. My fake trades are crashing harder than my Wi-Fi, and I'm just here like 'yep, I'm a trader now."
               </p>
               <div className="flex text-amber-500 mt-4">
                 ★★★★★
@@ -337,8 +386,19 @@ function Page() {
           <p className="text-black text-lg max-w-2xl mx-auto mb-8 opacity-90">
             Join thousands of traders who are mastering crypto trading without financial risk.
           </p>
-          <button className="bg-black text-white font-bold py-3 px-10 rounded-lg text-lg hover:bg-gray-900 transition-colors" onClick={openSignupModal}>
-            Get Started For Free
+          <button 
+            className="bg-black text-white font-bold py-3 px-10 rounded-lg text-lg hover:bg-gray-900 transition-colors flex items-center justify-center mx-auto" 
+            onClick={openSignupModal}
+            disabled={isLoading}
+          >
+            {isLoading ? (
+              <>
+                <LoadingSpinner />
+                <span>Loading...</span>
+              </>
+            ) : (
+              "Get Started For Free"
+            )}
           </button>
         </div>
       </section>
