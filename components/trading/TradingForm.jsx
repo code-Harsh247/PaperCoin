@@ -1,269 +1,288 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { useOrderbook } from "@/Context/OrderBookContext";
 
 export default function TradingForm() {
-  const [orderType, setOrderType] = useState("Limit");
-  const [buyPrice, setBuyPrice] = useState("63280.42");
-  const [sellPrice, setSellPrice] = useState("63280.42");
-  const [buyAmount, setBuyAmount] = useState("");
-  const [sellAmount, setSellAmount] = useState("");
-  const [bitcoinPrice, setBitcoinPrice] = useState("63280.42");
+  const { orderbook, addVirtualOrder } = useOrderbook();
 
-  useEffect(() => {
-    // Fetch Bitcoin price on component mount
-    const fetchBitcoinPrice = async () => {
-      try {
-        const response = await fetch('https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT');
-        const data = await response.json();
-        if (data && data.price) {
-          const formattedPrice = parseFloat(data.price).toFixed(2);
-          setBitcoinPrice(formattedPrice);
-          setBuyPrice(formattedPrice);
-          setSellPrice(formattedPrice);
-        }
-      } catch (error) {
-        console.error("Error fetching Bitcoin price:", error);
+  // Mock balances - in a real app, these would come from a balances context or API
+  const balance = {
+    USDT: 10000,
+    BTC: 1.0,
+  };
+
+  const [orderType, setOrderType] = useState("Limit");
+  const [buyPrice, setBuyPrice] = useState("");
+  const [sellPrice, setSellPrice] = useState("");
+  const [buyAmount, setBuyAmount] = useState("1");
+  const [sellAmount, setSellAmount] = useState("1");
+  const [buyError, setBuyError] = useState("");
+  const [sellError, setSellError] = useState("");
+  const [marketPrice, setMarketPrice] = useState(null); // Store Binance API price
+
+  // Format price for display
+  const formatPrice = (price) => {
+    return parseFloat(price).toFixed(2);
+  };
+
+  // Parse input safely
+  const parseInput = (value) => {
+    const parsed = parseFloat(value);
+    return isNaN(parsed) ? 0 : parsed;
+  };
+
+  // Validate number input
+  const validateNumberInput = (value) => {
+    return /^[0-9]*\.?[0-9]*$/.test(value);
+  };
+
+  // Calculate totals
+  const buyTotal = buyPrice && buyAmount ? parseInput(buyPrice) * parseInput(buyAmount) : 0;
+  const sellTotal = sellPrice && sellAmount ? parseInput(sellPrice) * parseInput(sellAmount) : 0;
+
+  // Fetch price from Binance API
+  const fetchPrice = useCallback(async () => {
+    try {
+      const response = await fetch(
+        "https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT"
+      );
+      if (!response.ok) {
+        throw new Error("Failed to fetch price");
       }
-    };
-    
-    fetchBitcoinPrice();
-  }, []);
+      const data = await response.json();
+      const price = parseFloat(data.price);
+      setMarketPrice(price);
+
+      // Initialize price fields if empty
+      if (!buyPrice) setBuyPrice(formatPrice(price));
+      if (!sellPrice) setSellPrice(formatPrice(price));
+    } catch (error) {
+      console.error("Error fetching Binance price:", error.message);
+    }
+  }, [buyPrice, sellPrice]);
+
+  // Poll Binance API for price updates
+  useEffect(() => {
+    fetchPrice(); // Initial fetch
+    const interval = setInterval(fetchPrice, 5000); // Poll every 5 seconds
+
+    return () => clearInterval(interval); // Cleanup on unmount
+  }, [fetchPrice]);
+
+  // Place buy order
+  const handleBuy = () => {
+    setBuyError("");
+
+    try {
+      if (orderType !== "Market" && parseInput(buyPrice) <= 0) {
+        throw new Error("Please enter a valid price");
+      }
+
+      if (parseInput(buyAmount) <= 0) {
+        throw new Error("Please enter a valid amount");
+      }
+
+      const cost = parseInput(buyPrice) * parseInput(buyAmount);
+      if (cost > balance.USDT) {
+        throw new Error(
+          `Insufficient USDT balance (${balance.USDT.toFixed(2)} USDT available)`
+        );
+      }
+
+      // Add virtual order using the context
+      addVirtualOrder("bids", parseInput(buyPrice), parseInput(buyAmount));
+      setBuyAmount("1"); // Reset to default of 1 BTC
+    } catch (error) {
+      setBuyError(error.message);
+    }
+  };
+
+  // Place sell order
+  const handleSell = () => {
+    setSellError("");
+
+    try {
+      if (orderType !== "Market" && parseInput(sellPrice) <= 0) {
+        throw new Error("Please enter a valid price");
+      }
+
+      if (parseInput(sellAmount) <= 0) {
+        throw new Error("Please enter a valid amount");
+      }
+
+      if (parseInput(sellAmount) > balance.BTC) {
+        throw new Error(
+          `Insufficient BTC balance (${balance.BTC.toFixed(8)} BTC available)`
+        );
+      }
+
+      // Add virtual order using the context
+      addVirtualOrder("asks", parseInput(sellPrice), parseInput(sellAmount));
+      setSellAmount("1"); // Reset to default of 1 BTC
+    } catch (error) {
+      setSellError(error.message);
+    }
+  };
 
   return (
     <div className="bg-[#111722] text-white p-4 rounded-xl w-full mx-auto shadow-xl border border-gray-800">
+      {/* Order Type Buttons */}
       <div className="flex space-x-3 mb-4 items-center">
-        <button
-          className={`px-3 py-1.5 rounded-lg text-sm ${
-            orderType === "Limit"
-              ? "text-yellow-400 font-bold"
-              : "text-white hover:bg-gray-800 transition-colors duration-200"
-          }`}
-          onClick={() => setOrderType("Limit")}
-        >
-          Limit
-        </button>
-        <button
-          className={`px-3 py-1.5 rounded-lg text-sm ${
-            orderType === "Market"
-              ? "text-yellow-400 font-bold"
-              : "text-white hover:bg-gray-800 transition-colors duration-200"
-          }`}
-          onClick={() => setOrderType("Market")}
-        >
-          Market
-        </button>
-        <button
-          className={`px-3 py-1.5 rounded-lg text-sm flex items-center ${
-            orderType === "Stop Limit"
-              ? "text-yellow-400 font-bold"
-              : "text-white hover:bg-gray-800 transition-colors duration-200"
-          }`}
-          onClick={() => setOrderType("Stop Limit")}
-        >
-          Stop Limit
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            className="h-3 w-3 ml-1"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
+        {["Limit", "Market"].map((type) => (
+          <button
+            key={type}
+            className={`px-3 py-1.5 rounded-lg text-sm ${
+              orderType === type
+                ? "text-yellow-400 font-bold"
+                : "text-white hover:bg-gray-800 transition-colors duration-200"
+            }`}
+            onClick={() => setOrderType(type)}
           >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M19 9l-7 7-7-7"
-            />
-          </svg>
-        </button>
+            {type}
+          </button>
+        ))}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Buy Side */}
+        {/* BUY SIDE */}
         <div className="bg-[#111722] p-3 rounded-lg border border-gray-800 shadow-lg">
-          {orderType === "Stop Limit" && (
-            <div className="mb-3">
-              <div className="bg-gray-800 border border-gray-700 rounded-lg relative">
-                <div className="absolute top-1 left-2 text-gray-400 text-xs">
-                  Stop
-                </div>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  pattern="[0-9]*\.?[0-9]*"
-                  className="w-full bg-transparent pt-6 pb-1.5 px-2 focus:outline-none text-right text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                />
-                <div className="absolute top-1 right-2 text-gray-400 text-xs">USDT</div>
-              </div>
-            </div>
-          )}
-
+          {/* Price Input */}
           <div className="mb-3">
             <div className="bg-gray-800 border border-gray-700 rounded-lg relative">
               <div className="absolute top-1 left-2 text-gray-400 text-xs">
-                {orderType === "Stop Limit" ? "Limit" : "Price"}
-              </div>
-              {orderType === "Market" ? (
-                <input
-                  type="text"
-                  value="Market Price"
-                  disabled
-                  className="w-full bg-transparent pt-6 pb-1.5 px-2 focus:outline-none text-right text-sm text-gray-500"
-                />
-              ) : (
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  pattern="[0-9]*\.?[0-9]*"
-                  value={buyPrice}
-                  onChange={(e) => {
-                    // Only allow numbers and decimal point
-                    if (/^[0-9]*\.?[0-9]*$/.test(e.target.value) || e.target.value === '') {
-                      setBuyPrice(e.target.value);
-                    }
-                  }}
-                  className="w-full bg-transparent pt-6 pb-1.5 px-2 focus:outline-none text-right text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                />
-              )}
-              <div className="absolute top-1 right-2 text-gray-400 text-xs">USDT</div>
-            </div>
-          </div>
-
-          <div className="mb-3">
-            <div className="bg-gray-800 border border-gray-700 rounded-lg relative">
-              <div className="absolute top-1 left-2 text-gray-400 text-xs">
-                Amount
+                Price per BTC
               </div>
               <input
                 type="text"
-                inputMode="numeric"
-                pattern="[0-9]*\.?[0-9]*"
-                value={buyAmount}
+                value={orderType === "Market" ? "Market Price" : buyPrice}
                 onChange={(e) => {
-                  // Only allow numbers and decimal point
-                  if (/^[0-9]*\.?[0-9]*$/.test(e.target.value) || e.target.value === '') {
-                    setBuyAmount(e.target.value);
+                  if (validateNumberInput(e.target.value)) {
+                    setBuyPrice(e.target.value);
                   }
                 }}
-                className="w-full bg-transparent pt-6 pb-1.5 px-2 focus:outline-none text-right text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                placeholder=""
+                disabled={orderType === "Market"}
+                className={`w-full bg-transparent pt-6 pb-1.5 px-2 focus:outline-none text-right text-sm ${
+                  orderType === "Market" ? "text-gray-500" : "text-white"
+                }`}
               />
-              <div className="absolute top-1 right-2 text-gray-400 text-xs">BTC</div>
-            </div>
-          </div>
-
-          <div className="mb-3">
-            <div className="bg-gray-800 border border-gray-700 rounded-lg p-2 flex justify-between items-center text-sm">
-              <div className="text-gray-400">Total</div>
-              <div className="text-gray-400">
-                <span>Min 10 USDT</span>
+              <div className="absolute top-1 right-2 text-gray-400 text-xs">
+                USDT
               </div>
             </div>
           </div>
 
-          <div className="flex justify-between text-gray-400 mb-3 text-xs">
-            <span>Available</span>
-            <div className="flex items-center">
-              <span>0.00000000 USDT</span>
+          {/* Amount Input (BTC to buy) */}
+          <div className="mb-3">
+            <div className="bg-gray-800 border border-gray-700 rounded-lg relative">
+              <div className="absolute top-1 left-2 text-gray-400 text-xs">
+                BTC to Buy
+              </div>
+              <input
+                type="text"
+                value={buyAmount}
+                onChange={(e) => {
+                  if (validateNumberInput(e.target.value)) {
+                    setBuyAmount(e.target.value);
+                  }
+                }}
+                className="w-full bg-transparent pt-6 pb-1.5 px-2 focus:outline-none text-right text-sm text-white"
+              />
+              <div className="absolute top-1 right-2 text-gray-400 text-xs">
+                BTC
+              </div>
             </div>
           </div>
 
-          <button className="w-full bg-green-500 hover:bg-green-600 text-white py-2 rounded-lg font-medium shadow-lg text-sm transition-colors duration-200">
+          {/* Total Cost */}
+          <div className="mb-3 bg-gray-800 border border-gray-700 rounded-lg p-2 flex justify-between items-center">
+            <span className="text-gray-400 text-xs">Total Cost:</span>
+            <span className="text-white text-sm">{buyTotal.toFixed(2)} USDT</span>
+          </div>
+
+          {/* Available Balance */}
+          <div className="flex justify-between text-gray-400 mb-3 text-xs">
+            <span>Available</span>
+            <span>{balance.USDT.toFixed(2)} USDT</span>
+          </div>
+
+          {buyError && <div className="mb-3 text-red-500 text-xs">{buyError}</div>}
+
+          <button
+            className="w-full bg-green-500 hover:bg-green-600 text-white py-2 rounded-lg font-medium shadow-lg text-sm transition-colors duration-200"
+            onClick={handleBuy}
+          >
             Buy BTC
           </button>
         </div>
 
-        {/* Sell Side */}
+        {/* SELL SIDE */}
         <div className="bg-[#111722] p-3 rounded-lg border border-gray-800 shadow-lg">
-          {orderType === "Stop Limit" && (
-            <div className="mb-3">
-              <div className="bg-gray-800 border border-gray-700 rounded-lg relative">
-                <div className="absolute top-1 left-2 text-gray-400 text-xs">
-                  Stop
-                </div>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  pattern="[0-9]*\.?[0-9]*"
-                  className="w-full bg-transparent pt-6 pb-1.5 px-2 focus:outline-none text-right text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                />
-                <div className="absolute top-1 right-2 text-gray-400 text-xs">USDT</div>
-              </div>
-            </div>
-          )}
-
+          {/* Price Input */}
           <div className="mb-3">
             <div className="bg-gray-800 border border-gray-700 rounded-lg relative">
               <div className="absolute top-1 left-2 text-gray-400 text-xs">
-                {orderType === "Stop Limit" ? "Limit" : "Price"}
-              </div>
-              {orderType === "Market" ? (
-                <input
-                  type="text"
-                  value="Market Price"
-                  disabled
-                  className="w-full bg-transparent pt-6 pb-1.5 px-2 focus:outline-none text-right text-sm text-gray-500"
-                />
-              ) : (
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  pattern="[0-9]*\.?[0-9]*"
-                  value={sellPrice}
-                  onChange={(e) => {
-                    // Only allow numbers and decimal point
-                    if (/^[0-9]*\.?[0-9]*$/.test(e.target.value) || e.target.value === '') {
-                      setSellPrice(e.target.value);
-                    }
-                  }}
-                  className="w-full bg-transparent pt-6 pb-1.5 px-2 focus:outline-none text-right text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                />
-              )}
-              <div className="absolute top-1 right-2 text-gray-400 text-xs">USDT</div>
-            </div>
-          </div>
-
-          <div className="mb-3">
-            <div className="bg-gray-800 border border-gray-700 rounded-lg relative">
-              <div className="absolute top-1 left-2 text-gray-400 text-xs">
-                Amount
+                Price per BTC
               </div>
               <input
                 type="text"
-                inputMode="numeric"
-                pattern="[0-9]*\.?[0-9]*"
-                value={sellAmount}
+                value={orderType === "Market" ? "Market Price" : sellPrice}
                 onChange={(e) => {
-                  // Only allow numbers and decimal point
-                  if (/^[0-9]*\.?[0-9]*$/.test(e.target.value) || e.target.value === '') {
-                    setSellAmount(e.target.value);
+                  if (validateNumberInput(e.target.value)) {
+                    setSellPrice(e.target.value);
                   }
                 }}
-                className="w-full bg-transparent pt-6 pb-1.5 px-2 focus:outline-none text-right text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                placeholder=""
+                disabled={orderType === "Market"}
+                className={`w-full bg-transparent pt-6 pb-1.5 px-2 focus:outline-none text-right text-sm ${
+                  orderType === "Market" ? "text-gray-500" : "text-white"
+                }`}
               />
-              <div className="absolute top-1 right-2 text-gray-400 text-xs">BTC</div>
-            </div>
-          </div>
-
-          <div className="mb-3">
-            <div className="bg-gray-800 border border-gray-700 rounded-lg p-2 flex justify-between items-center text-sm">
-              <div className="text-gray-400">Total</div>
-              <div className="text-gray-400">
-                <span>Min 10 USDT</span>
+              <div className="absolute top-1 right-2 text-gray-400 text-xs">
+                USDT
               </div>
             </div>
           </div>
 
-          <div className="flex justify-between text-gray-400 mb-3 text-xs">
-            <span>Available</span>
-            <div className="flex items-center">
-              <span>0.00000000 BTC</span>
+          {/* Amount Input (BTC to sell) */}
+          <div className="mb-3">
+            <div className="bg-gray-800 border border-gray-700 rounded-lg relative">
+              <div className="absolute top-1 left-2 text-gray-400 text-xs">
+                BTC to Sell
+              </div>
+              <input
+                type="text"
+                value={sellAmount}
+                onChange={(e) => {
+                  if (validateNumberInput(e.target.value)) {
+                    setSellAmount(e.target.value);
+                  }
+                }}
+                className="w-full bg-transparent pt-6 pb-1.5 px-2 focus:outline-none text-right text-sm text-white"
+              />
+              <div className="absolute top-1 right-2 text-gray-400 text-xs">
+                BTC
+              </div>
             </div>
           </div>
 
-          <button className="w-full bg-red-500 hover:bg-red-600 text-white py-2 rounded-lg font-medium shadow-lg text-sm transition-colors duration-200">
+          {/* Total Receive */}
+          <div className="mb-3 bg-gray-800 border border-gray-700 rounded-lg p-2 flex justify-between items-center">
+            <span className="text-gray-400 text-xs">Total Receive:</span>
+            <span className="text-white text-sm">{sellTotal.toFixed(2)} USDT</span>
+          </div>
+
+          {/* Available Balance */}
+          <div className="flex justify-between text-gray-400 mb-3 text-xs">
+            <span>Available</span>
+            <span>{balance.BTC.toFixed(8)} BTC</span>
+          </div>
+
+          {sellError && <div className="mb-3 text-red-500 text-xs">{sellError}</div>}
+
+          <button
+            className="w-full bg-red-500 hover:bg-red-600 text-white py-2 rounded-lg font-medium shadow-lg text-sm transition-colors duration-200"
+            onClick={handleSell}
+          >
             Sell BTC
           </button>
         </div>
