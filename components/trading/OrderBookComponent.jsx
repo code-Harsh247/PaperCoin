@@ -1,6 +1,26 @@
 'use client'
 import React, { useState, useEffect, useMemo } from 'react';
 import { useOrderbook } from '@/Context/OrderBookContext';
+// Custom scrollbar styles
+const scrollbarStyles = `
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+  }
+  
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: #111722;
+    border-radius: 4px;
+  }
+  
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: #1e293b;
+    border-radius: 4px;
+  }
+  
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #334155;
+  }
+`;
 
 const OrderBookComponent = () => {
   const { orderbook, rawOrderbook, virtualOrders } = useOrderbook();
@@ -105,29 +125,31 @@ const OrderBookComponent = () => {
     };
   };
 
-  // Get the calculated spread
-  const spread = calculateSpread();
+    // Get the calculated spread
+    const spread = calculateSpread();
 
   return (
-    <div className="bg-[#111722] text-white w-full h-full rounded-lg p-4">
+    <>
+      <style>{scrollbarStyles}</style>
+      <div className="bg-[#111722] text-white w-full h-full rounded-lg p-4 shadow-lg">
       {/* Header with display mode toggle */}
       <div className="flex justify-between items-center mb-4">
-        <h2 className="text-lg font-medium">Order Book</h2>
-        <div className="flex space-x-2">
+        <h2 className="text-lg font-semibold tracking-wide">Order Book</h2>
+        <div className="flex space-x-1">
           <button 
-            className={`text-xs px-2 py-1 rounded ${displayMode === 'combined' ? 'bg-blue-600' : 'bg-gray-700'}`}
+            className={`text-xs px-3 py-1.5 rounded-md transition-colors duration-200 ${displayMode === 'combined' ? 'bg-amber-500 text-white' : 'bg-gray-700 hover:bg-gray-600'}`}
             onClick={() => setDisplayMode('combined')}
           >
             Combined
           </button>
           <button 
-            className={`text-xs px-2 py-1 rounded ${displayMode === 'real' ? 'bg-blue-600' : 'bg-gray-700'}`}
+            className={`text-xs px-3 py-1.5 rounded-md transition-colors duration-200 ${displayMode === 'real' ? 'bg-blue-600 text-white' : 'bg-gray-700 hover:bg-gray-600'}`}
             onClick={() => setDisplayMode('real')}
           >
             Real Only
           </button>
           <button 
-            className={`text-xs px-2 py-1 rounded ${displayMode === 'virtual' ? 'bg-blue-600' : 'bg-gray-700'}`}
+            className={`text-xs px-3 py-1.5 rounded-md transition-colors duration-200 ${displayMode === 'virtual' ? 'bg-blue-600 text-white' : 'bg-gray-700 hover:bg-gray-600'}`}
             onClick={() => setDisplayMode('virtual')}
           >
             Virtual Only
@@ -136,11 +158,10 @@ const OrderBookComponent = () => {
       </div>
 
       {/* Column headers */}
-      <div className="grid grid-cols-4 text-xs text-gray-400 pb-2 border-b border-gray-700">
-        <div>Price (USDT)</div>
-        <div className="text-right">Amount (BTC)</div>
-        <div className="text-right">Total</div>
-        <div className="text-right">Sum (BTC)</div>
+      <div className="grid grid-cols-12 text-xs text-gray-400 pb-2 border-b border-gray-700 font-medium">
+        <div className="col-span-4">Price (USDT)</div>
+        <div className="col-span-4 text-right">Amount (BTC)</div>
+        <div className="col-span-4 text-right">Total</div>
       </div>
 
       {/* Asks (Sell Orders) - Reversed to show highest price at top */}
@@ -151,9 +172,9 @@ const OrderBookComponent = () => {
           .map((ask, index) => (
             <div 
               key={`ask-${ask.price}-${index}`} 
-              className={`grid grid-cols-4 text-xs py-1 border-b border-gray-800 relative ${
+              className={`grid grid-cols-12 text-xs py-1.5 border-b border-gray-800 relative ${
                 ask.isVirtual ? 'text-red-300' : 'text-red-500'
-              }`}
+              } hover:bg-gray-800 transition-colors duration-150`}
             >
               {/* Red background for visualization */}
               <div 
@@ -162,7 +183,7 @@ const OrderBookComponent = () => {
               ></div>
               
               {/* Price */}
-              <div className="relative z-10 flex items-center">
+              <div className="relative z-10 flex items-center col-span-4">
                 {formatPrice(ask.price)}
                 {ask.isVirtual && (
                   <span className="ml-1 px-1 py-0.5 bg-red-900 text-red-300 rounded text-xxs">V</span>
@@ -170,23 +191,22 @@ const OrderBookComponent = () => {
               </div>
               
               {/* Amount */}
-              <div className="text-right relative z-10">{formatAmount(ask.amount)}</div>
+              <div className="text-right relative z-10 col-span-4 font-mono">{formatAmount(ask.amount)}</div>
               
               {/* Value (Price * Amount) */}
-              <div className="text-right relative z-10">
+              <div className="text-right relative z-10 col-span-4 font-mono">
                 {formatPrice(parseFloat(ask.price) * parseFloat(ask.amount))}
               </div>
-              
-              {/* Total */}
-              <div className="text-right relative z-10">{formatAmount(ask.total)}</div>
             </div>
           ))}
       </div>
 
       {/* Spread indicator */}
       {spread && (
-        <div className="py-2 text-center text-xs text-gray-400 border-b border-gray-700">
-          Spread: {spread.value} ({spread.percentage}%)
+        <div className="py-2 text-center text-xs border-b border-gray-700 bg-gray-800 rounded-md my-1">
+          <span className="font-medium text-gray-300">Spread:</span> 
+          <span className="text-yellow-400 ml-1 font-mono">{spread.value}</span> 
+          <span className="text-gray-400 ml-1">({spread.percentage}%)</span>
         </div>
       )}
 
@@ -196,9 +216,9 @@ const OrderBookComponent = () => {
           .map((bid, index) => (
             <div 
               key={`bid-${bid.price}-${index}`} 
-              className={`grid grid-cols-4 text-xs py-1 border-b border-gray-800 relative ${
+              className={`grid grid-cols-12 text-xs py-1.5 border-b border-gray-800 relative ${
                 bid.isVirtual ? 'text-green-300' : 'text-green-500'
-              }`}
+              } hover:bg-gray-800 transition-colors duration-150`}
             >
               {/* Green background for visualization */}
               <div 
@@ -207,7 +227,7 @@ const OrderBookComponent = () => {
               ></div>
               
               {/* Price */}
-              <div className="relative z-10 flex items-center">
+              <div className="relative z-10 flex items-center col-span-4">
                 {formatPrice(bid.price)}
                 {bid.isVirtual && (
                   <span className="ml-1 px-1 py-0.5 bg-green-900 text-green-300 rounded text-xxs">V</span>
@@ -215,19 +235,17 @@ const OrderBookComponent = () => {
               </div>
               
               {/* Amount */}
-              <div className="text-right relative z-10">{formatAmount(bid.amount)}</div>
+              <div className="text-right relative z-10 col-span-4 font-mono">{formatAmount(bid.amount)}</div>
               
               {/* Value (Price * Amount) */}
-              <div className="text-right relative z-10">
+              <div className="text-right relative z-10 col-span-4 font-mono">
                 {formatPrice(parseFloat(bid.price) * parseFloat(bid.amount))}
               </div>
-              
-              {/* Total */}
-              <div className="text-right relative z-10">{formatAmount(bid.total)}</div>
             </div>
           ))}
       </div>
     </div>
+    </>
   );
 };
 
