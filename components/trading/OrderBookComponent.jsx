@@ -64,23 +64,23 @@ const OrderBookComponent = () => {
     return (parseFloat(total) / maxTotal) * 100;
   };
 
-  // Current spread calculation
-  const calculateSpread = () => {
-    if (orderbook.asks.length === 0 || orderbook.bids.length === 0) return null;
-    
-    const lowestAsk = parseFloat(orderbook.asks[0].price);
-    const highestBid = parseFloat(orderbook.bids[0].price);
-    const spread = lowestAsk - highestBid;
-    const spreadPercentage = (spread / lowestAsk) * 100;
-    
-    return {
-      value: spread.toFixed(2),
-      percentage: spreadPercentage.toFixed(2)
+    // Current spread calculation
+    const calculateSpread = () => {
+      if (orderbook.asks.length === 0 || orderbook.bids.length === 0) return null;
+      
+      const lowestAsk = parseFloat(orderbook.asks[0].price);
+      const highestBid = parseFloat(orderbook.bids[0].price);
+      const spread = lowestAsk - highestBid;
+      const spreadPercentage = (spread / lowestAsk) * 100;
+      
+      return {
+        value: spread.toFixed(2),
+        percentage: spreadPercentage.toFixed(2)
+      };
     };
-  };
 
-  // Get the calculated spread
-  const spread = calculateSpread();
+    // Get the calculated spread
+    const spread = calculateSpread();
 
   return (
     <>
@@ -91,7 +91,7 @@ const OrderBookComponent = () => {
         <h2 className="text-lg font-semibold tracking-wide">Order Book</h2>
         <div className="flex space-x-1">
           <button 
-            className={`text-xs px-3 py-1.5 rounded-md transition-colors duration-200 ${displayMode === 'combined' ? 'bg-blue-600 text-white' : 'bg-gray-700 hover:bg-gray-600'}`}
+            className={`text-xs px-3 py-1.5 rounded-md transition-colors duration-200 ${displayMode === 'combined' ? 'bg-amber-500 text-white' : 'bg-gray-700 hover:bg-gray-600'}`}
             onClick={() => setDisplayMode('combined')}
           >
             Combined

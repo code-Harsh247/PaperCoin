@@ -296,7 +296,7 @@ const CandleStickChart = ({ symbol = 'btcusdt', defaultInterval = '1d' }) => {
               onClick={() => handleIntervalChange(int.value)}
               className={`px-3 py-1 text-xs rounded mx-1 ${
                 interval === int.value
-                  ? 'bg-blue-600 text-white'
+                  ? 'bg-amber-500 text-white'
                   : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
               }`}
             >
