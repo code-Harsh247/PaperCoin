@@ -70,7 +70,7 @@ export const OrderbookProvider = ({ symbol, children }) => {
         console.error("Side must be 'bids' or 'asks'");
         return prev;
       }
-
+      console.log(`Adding virtual order: ${sideKey} - Price: ${price}, Amount: ${amount}`);
       // Check if order at this price already exists
       const existingOrderIndex = prev[sideKey].findIndex(
         order => parseFloat(order.price) === parseFloat(price)
