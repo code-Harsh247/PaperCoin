@@ -108,6 +108,7 @@ const MarketOverview = () => {
     }); // Handle asynchronous operations properly
   }, []); // Run only once on component mount
 
+  console.log(coins); // Log the coins state
   // Filter coins based on selected filter
   const filteredCoins = coins.filter((coin) => {
     if (filter === "All") return true;
