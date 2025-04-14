@@ -1,50 +1,88 @@
 "use client";
-
 import React, { useEffect, useState } from "react";
+import { useAuthStore } from "@/store/useAuthStore";
+import axios from "axios";
 
 const OrderHistory = () => {
-  const [orders, setOrders] = useState([]);
+  const [trades, setTrades] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const { user } = useAuthStore();
 
   useEffect(() => {
-    const fetchOrderHistory = async () => {
+    const fetchTrades = async () => {
       try {
-        const response = await fetch("/api/orderHistory", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ user_id: 1 }),
+        const response = await axios.post("/api/trades/fetchTrades", {
+          user_id: user.userId
         });
-
-        if (!response.ok) throw new Error("Failed to fetch order history");
-
-        const data = await response.json();
-        console.log(data);
-        setOrders(data);
+        
+        console.log(response.data);
+        setTrades(response.data.trades || []);
       } catch (err) {
-        setError(err.message);
+        setError(err.message || "Failed to fetch trades");
       } finally {
         setLoading(false);
       }
     };
 
-    fetchOrderHistory();
-  }, []);
+    fetchTrades();
+  }, [user]);
 
   const columns = [
-    { id: "trade_time", label: "Date" },
-    { id: "symbol", label: "Pair" },
-    { id: "order_type", label: "Type" },
-    { id: "side", label: "Side" },
-    { id: "price", label: "Price" },
-    { id: "amount", label: "Amount" },
-    { id: "trade_status", label: "Status" },
-    { id: "total", label: "Total" },
+    { id: "created_at", label: "Date" },
+    { id: "id", label: "ID" },
+    { id: "trade_type", label: "Type" },
+    { id: "price", label: "Price (USDT)" },
+    { id: "amount", label: "Amount (BTC)" },
+    { id: "filled_amount", label: "Filled" },
+    { id: "total", label: "Total Value" },
+    { id: "status", label: "Status" },
   ];
+
+  const formatDate = (dateString) => {
+    return new Date(dateString).toLocaleString();
+  };
+
+  const formatPrice = (price) => {
+    return parseFloat(price).toLocaleString(undefined, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    });
+  };
+
+  const formatCrypto = (amount) => {
+    return parseFloat(amount).toLocaleString(undefined, {
+      minimumFractionDigits: 8,
+      maximumFractionDigits: 8
+    });
+  };
+
+  const calculateTotal = (price, amount) => {
+    return parseFloat(price) * parseFloat(amount);
+  };
+
+  const getStatusColor = (status) => {
+    switch (status) {
+      case "open":
+        return "text-yellow-500";
+      case "filled":
+        return "text-green-500";
+      case "partially_filled":
+        return "text-blue-500";
+      case "canceled":
+        return "text-red-500";
+      default:
+        return "text-gray-400";
+    }
+  };
+
+  const getTypeColor = (type) => {
+    return type === "bid" ? "text-green-500" : "text-red-500";
+  };
 
   return (
     <div>
-      <div className="w-full overflow-x-auto bg-[#111722]">
+      <div className="w-full overflow-x-auto bg-[#111722] rounded-lg">
         <table className="w-full">
           <thead>
             <tr>
@@ -64,27 +102,32 @@ const OrderHistory = () => {
               <tr>
                 <td colSpan={columns.length} className="text-center py-4 text-red-500">{error}</td>
               </tr>
-            ) : orders.length > 0 ? (
-              orders.map((order) => (
-                <tr key={order.order_id} className="border-t border-gray-800 hover:bg-gray-800">
-                  <td className="px-4 py-3 text-sm">{new Date(order.trade_time).toLocaleString()}</td>
-                  <td className="px-4 py-3 text-sm">{order.symbol}</td>
-                  <td className="px-4 py-3 text-sm">{order.order_type}</td>
-                  <td className={`px-4 py-3 text-sm ${order.side === "buy" ? "text-green-500" : "text-red-500"}`}>
-                    {order.side.charAt(0).toUpperCase() + order.side.slice(1)}
+            ) : trades.length > 0 ? (
+              trades.map((trade) => (
+                <tr key={trade.id} className="border-t border-gray-800 hover:bg-gray-800">
+                  <td className="px-4 py-3 text-sm text-gray-300">{formatDate(trade.created_at)}</td>
+                  <td className="px-4 py-3 text-sm text-gray-300">#{trade.id}</td>
+                  <td className={`px-4 py-3 text-sm font-medium ${getTypeColor(trade.trade_type)}`}>
+                    {trade.trade_type === "bid" ? "Buy" : "Sell"}
                   </td>
-                  <td className="px-4 py-3 text-sm">{parseFloat(order.price).toFixed(2)}</td>
-                  <td className="px-4 py-3 text-sm">{parseFloat(order.amount).toFixed(8)}</td>
-                  <td className={`px-4 py-3 text-sm ${
-                    order.trade_status === "Filled" ? "text-green-500" :
-                    order.trade_status === "Canceled" ? "text-red-500" : "text-yellow-500"
-                  }`}>{order.trade_status}</td>
-                  <td className="px-4 py-3 text-sm">{parseFloat(order.total).toFixed(2)}</td>
+                  <td className="px-4 py-3 text-sm text-gray-300">{formatPrice(trade.price)}</td>
+                  <td className="px-4 py-3 text-sm text-gray-300">{formatCrypto(trade.amount)}</td>
+                  <td className="px-4 py-3 text-sm text-gray-300">
+                    {parseFloat(trade.filled_amount) > 0 ? formatCrypto(trade.filled_amount) : "-"}
+                  </td>
+                  <td className="px-4 py-3 text-sm text-gray-300">
+                    {formatPrice(calculateTotal(trade.price, trade.amount))}
+                  </td>
+                  <td className={`px-4 py-3 text-sm font-medium ${getStatusColor(trade.status)}`}>
+                    {trade.status.split("_").map(word => 
+                      word.charAt(0).toUpperCase() + word.slice(1)
+                    ).join(" ")}
+                  </td>
                 </tr>
               ))
             ) : (
               <tr>
-                <td colSpan={columns.length} className="text-center py-4 text-gray-400">No order history found.</td>
+                <td colSpan={columns.length} className="text-center py-4 text-gray-400">No trades found.</td>
               </tr>
             )}
           </tbody>

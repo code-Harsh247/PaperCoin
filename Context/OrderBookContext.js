@@ -23,8 +23,7 @@ export const OrderbookProvider = ({ symbol, children }) => {
 
   const [connected, setConnected] = useState(false);
   const [error, setError] = useState(null);
-  const [isLoadingTrades, setIsLoadingTrades] = useState(false);
-
+  const [isLoadingTrades, setIsLoadingTrades] = useState(false); 
   // Calculate totals for the orderbook entries
   const calculateTotals = useCallback((entries) => {
     let runningTotal = 0;
