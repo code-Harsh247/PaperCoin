@@ -99,6 +99,8 @@ const UserNameModal = ({ isOpen, onClose, initialMode = 'set-username', email })
             username: username
           });
         }
+
+
         
         // Close modal and notify parent component if needed
         onClose(username) // You can modify this to pass the username back if needed
