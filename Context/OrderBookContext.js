@@ -33,6 +33,8 @@ export const OrderbookProvider = ({ symbol, children }) => {
     });
   }, []);
 
+
+
   // Merge real orderbook with virtual orders and sort appropriately
   const mergeOrderbooks = useCallback(() => {
     // Clone real orderbook entries and mark them as real
@@ -309,6 +311,10 @@ const fetchUserTrades = useCallback(async () => {
   const getCompleteOrderbook = useCallback(() => {
     return mergeOrderbooks();
   }, [mergeOrderbooks]);
+
+  // useEffect(() => {
+  //   console.log('Orderbook updated:', orderbook);
+  // }, [orderbook]);
 
   // Context value
   const value = {

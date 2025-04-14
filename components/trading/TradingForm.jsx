@@ -2,17 +2,17 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useOrderbook } from "@/Context/OrderBookContext";
-import axios from "axios"; // Import axios
+import axios from "axios";
 import { useAuthStore } from "@/store/useAuthStore";
+import { toast } from "react-hot-toast"; // Import the toast function
 
 export default function TradingForm() {
   const { orderbook, addVirtualOrder, rawOrderbook, connected } = useOrderbook();
-  const [balance, setBalance] = useState({ USDT: 0, BTC: 0 }); // Initialize with default values
+  const [balance, setBalance] = useState({ USDT: 0, BTC: 0 });
   const { user } = useAuthStore();
   
   useEffect(() => {
     const fetchFunds = async () => {
-      // Check if user exists before making the API call
       if (!user || !user.userId) {
         console.log("User not available yet, skipping funds fetch");
         return;
@@ -23,18 +23,15 @@ export default function TradingForm() {
         if (response.status === 200) {
           console.log("Funds fetched successfully in trading: ", response.data.funds);
           
-          // Handle the array response structure correctly
           const fundsData = response.data.funds;
           
           if (Array.isArray(fundsData) && fundsData.length > 0) {
-            // Extract data from the first element in the array
             const userFunds = fundsData[0];
             setBalance({
               USDT: parseFloat(userFunds.available_funds) || 0,
               BTC: parseFloat(userFunds.btccoins) || 0
             });
           } else if (typeof fundsData === 'object' && fundsData !== null) {
-            // Handle case where it might be a direct object
             setBalance({
               USDT: parseFloat(fundsData.available_funds) || 0,
               BTC: parseFloat(fundsData.btccoins) || 0
@@ -47,7 +44,7 @@ export default function TradingForm() {
     };
     
     fetchFunds();
-  }, [user]); // Fetch funds when user changes
+  }, [user]);
 
   useEffect(() => {
     console.log("Balance updated:", balance);
@@ -60,40 +57,32 @@ export default function TradingForm() {
   const [sellAmount, setSellAmount] = useState("1");
   const [buyError, setBuyError] = useState("");
   const [sellError, setSellError] = useState("");
-  const [marketPrice, setMarketPrice] = useState(null); // Store Binance API price
+  const [marketPrice, setMarketPrice] = useState(null);
 
-  // Format price for display
   const formatPrice = (price) => {
     return parseFloat(price).toFixed(2);
   };
 
-  // Parse input safely
   const parseInput = (value) => {
     const parsed = parseFloat(value);
     return isNaN(parsed) ? 0 : parsed;
   };
 
-  // Validate number input
   const validateNumberInput = (value) => {
     return /^[0-9]*\.?[0-9]*$/.test(value);
   };
 
-  // Calculate totals
   const buyTotal = buyPrice && buyAmount ? parseInput(buyPrice) * parseInput(buyAmount) : 0;
   const sellTotal = sellPrice && sellAmount ? parseInput(sellPrice) * parseInput(sellAmount) : 0;
 
-  // Get current best price from orderbook
   useEffect(() => {
     if (rawOrderbook && rawOrderbook.bids.length > 0 && rawOrderbook.asks.length > 0) {
-      // Get best bid (highest buy) and best ask (lowest sell)
       const bestBid = parseFloat(rawOrderbook.bids[0].price);
       const bestAsk = parseFloat(rawOrderbook.asks[0].price);
 
-      // Use the average as market price
       const avgPrice = (bestBid + bestAsk) / 2;
       setMarketPrice(avgPrice);
 
-      // Initialize price fields if empty
       if (!buyPrice) setBuyPrice(formatPrice(avgPrice));
       if (!sellPrice) setSellPrice(formatPrice(avgPrice));
     }
@@ -121,12 +110,38 @@ export default function TradingForm() {
         );
       }
 
-      // Original behavior: Add virtual order using the context
       addVirtualOrder("bids", finalPrice, parseInput(buyAmount));
       console.log("Buy order placed:", { price: finalPrice, amount: parseInput(buyAmount) });
-      setBuyAmount("1"); // Reset to default of 1 BTC
+      
+      // Display success toast notification
+      toast.success(
+        `Buy order placed: ${parseInput(buyAmount)} BTC at ${formatPrice(finalPrice)} USDT`,
+        {
+          duration: 4000,
+          position: "top-right",
+          style: {
+            background: '#10B981',
+            color: '#fff',
+            border: '1px solid #065F46',
+          },
+          icon: '🔄',
+        }
+      );
+      
+      setBuyAmount("1");
     } catch (error) {
       setBuyError(error.message);
+      
+      // Display error toast notification
+      toast.error(error.message, {
+        duration: 4000,
+        position: "top-right",
+        style: {
+          background: '#EF4444',
+          color: '#fff',
+          border: '1px solid #991B1B',
+        },
+      });
     }
   };
 
@@ -151,23 +166,45 @@ export default function TradingForm() {
 
       const finalPrice = orderType === "Market" ? marketPrice : parseInput(sellPrice);
 
-      // Original behavior: Add virtual order using the context
       addVirtualOrder("asks", finalPrice, parseInput(sellAmount));
       console.log("Sell order placed:", { price: finalPrice, amount: parseInput(sellAmount) });
+      
+      // Display success toast notification
+      toast.success(
+        `Sell order placed: ${parseInput(sellAmount)} BTC at ${formatPrice(finalPrice)} USDT`,
+        {
+          duration: 4000,
+          position: "top-right",
+          style: {
+            background: '#EF4444',
+            color: '#fff',
+            border: '1px solid #991B1B',
+          },
+          icon: '🔄',
+        }
+      );
 
-      setSellAmount("1"); // Reset to default of 1 BTC
+      setSellAmount("1");
     } catch (error) {
       setSellError(error.message);
+      
+      // Display error toast notification
+      toast.error(error.message, {
+        duration: 4000,
+        position: "top-right",
+        style: {
+          background: '#EF4444',
+          color: '#fff',
+          border: '1px solid #991B1B',
+        },
+      });
     }
   };
 
   return (
     <div className="bg-[#111722] text-white p-4 rounded-xl w-full mx-auto shadow-xl border border-gray-800">
-
-
       {/* Order Type Buttons */}
       <div className="flex space-x-3 mb-4 items-center justify-between">
-
         <div>
           {["Limit", "Market"].map((type) => (
             <button
@@ -191,7 +228,6 @@ export default function TradingForm() {
             {connected ? 'Connected to Orderbook' : 'Disconnected from Orderbook'}
           </span>
         </div>
-
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

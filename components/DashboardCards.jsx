@@ -15,9 +15,8 @@ export const BalanceCard = ({
   amount = "$0.00",
   changePercentage = 0,
   changeLabel = "from yesterday",
-  iconBg = "bg-amber-500",
+  imgUrl,
   icon = Wallet,
-  ctaText = "View Details",
   onCtaClick = () => {},
   showAddFunds = false,
   showBitcoinCount = false,
@@ -53,13 +52,6 @@ export const BalanceCard = ({
       }
     };
 
-
-    // ws.onerror = (err) => {
-    //   setConnected(false);
-    //   setError('Connection error');
-    //   console.error('WebSocket Error:', err);
-    // };
-
     ws.onclose = () => {
       setConnected(false);
     };
@@ -80,72 +72,83 @@ export const BalanceCard = ({
       : "0.00";
 
   return (
-    <div className="bg-gradient-to-r from-gray-800 to-gray-900 rounded-xl shadow-lg p-6 border border-gray-700">
-      <div className="flex justify-between items-start mb-4">
-        <div>
-          <div className="flex items-center">
-            <h2 className="text-gray-400 text-sm">{title}</h2>
-            {showBitcoinCount && connected && (
-              <span className="ml-2 flex items-center">
-                <RefreshCw className="h-3 w-3 text-green-500 mr-1 animate-spin" />
-                <span className="text-green-500 text-xs">Live</span>
-              </span>
-            )}
-            {showBitcoinCount && !connected && error && (
-              <span className="ml-2 flex items-center">
-                <span className="w-2 h-2 rounded-full bg-red-500 mr-1"></span>
-                <span className="text-red-500 text-xs">Offline</span>
-              </span>
+    <div className="relative bg-gradient-to-r from-gray-800 to-[#111722] rounded-xl shadow-lg overflow-hidden border border-gray-700">
+      {/* Image container positioned on the right side */}
+      {imgUrl && (
+        <div className="absolute top-0 right-0 w-1/2 h-full overflow-hidden">
+          <div 
+            className="w-full h-full bg-cover bg-center"
+            style={{ backgroundImage: `url(${imgUrl})` }}
+          ></div>
+          
+        </div>
+      )}
+      
+      {/* Content container */}
+      <div className="relative z-10 p-6">
+        <div className="flex justify-between items-start mb-4">
+          <div>
+            <div className="flex items-center">
+              <h2 className="text-gray-400 text-sm">{title}</h2>
+              {showBitcoinCount && connected && (
+                <span className="ml-2 flex items-center">
+                  <RefreshCw className="h-3 w-3 text-green-500 mr-1 animate-spin" />
+                  <span className="text-green-500 text-xs">Live</span>
+                </span>
+              )}
+              {showBitcoinCount && !connected && error && (
+                <span className="ml-2 flex items-center">
+                  <span className="w-2 h-2 rounded-full bg-red-500 mr-1"></span>
+                  <span className="text-red-500 text-xs">Offline</span>
+                </span>
+              )}
+            </div>
+            <p className="text-3xl font-bold text-white mt-1">{amount}</p>
+
+            {showBitcoinCount && (
+              <div className="mt-3 p-2 bg-gray-700 bg-opacity-40 rounded-lg">
+                <div className="flex justify-between items-center">
+                  <div className="flex items-center">
+                    <div className="w-6 h-6 bg-amber-500 rounded-full flex items-center justify-center mr-2">
+                      <span className="text-xs font-bold">₿</span>
+                    </div>
+                    <span className="text-white">{bitcoinCount} BTC</span>
+                  </div>
+                  <span className="text-amber-500 px-2">≈ ${usdEquivalent}</span>
+                </div>
+              </div>
             )}
           </div>
-          <p className="text-3xl font-bold text-white mt-1">{amount}</p>
+        </div>
 
-          {showBitcoinCount && (
-            <div className="mt-3 p-2 bg-gray-700 bg-opacity-40 rounded-lg">
-              <div className="flex justify-between items-center">
-                <div className="flex items-center">
-                  <div className="w-6 h-6 bg-amber-500 rounded-full flex items-center justify-center mr-2">
-                    <span className="text-xs font-bold">₿</span>
-                  </div>
-                  <span className="text-white">{bitcoinCount} BTC</span>
-                </div>
-                <span className="text-amber-500 px-2">≈ ${usdEquivalent}</span>
-              </div>
+        <div className="relative min-h-[10px]">
+          {changePercentage !== null && (
+            <div className="flex items-center text-sm">
+              {isPositive ? (
+                <ArrowUp className="h-4 w-4 text-green-500 mr-1" />
+              ) : (
+                <ArrowDown className="h-4 w-4 text-red-500 mr-1" />
+              )}
+              <span className={isPositive ? "text-green-500" : "text-red-500"}>
+                {isPositive ? "+" : ""}
+                {changePercentage}%
+              </span>
+              {changeLabel && (
+                <span className="text-gray-400 ml-1">{changeLabel}</span>
+              )}
             </div>
           )}
+
+          {/* Bottom right positioned button */}
+          {showAddFunds && (
+            <button
+              onClick={onCtaClick}
+              className="absolute bottom-0 right-0 bg-amber-500 hover:bg-amber-600 text-black text-sm px-3 py-1 rounded-lg"
+            >
+              Add Funds
+            </button>
+          )}
         </div>
-        {/* <div className={`p-3 ${iconBg} bg-opacity-20 rounded-lg`}>
-          <Icon className={`h-6 w-6 ${iconBg.replace("bg-", "text-")}`} />
-        </div> */}
-      </div>
-
-      <div className="relative min-h-[10px]">
-        {changePercentage !== null && (
-          <div className="flex items-center text-sm">
-            {isPositive ? (
-              <ArrowUp className="h-4 w-4 text-green-500 mr-1" />
-            ) : (
-              <ArrowDown className="h-4 w-4 text-red-500 mr-1" />
-            )}
-            <span className={isPositive ? "text-green-500" : "text-red-500"}>
-              {isPositive ? "+" : ""}
-              {changePercentage}%
-            </span>
-            {changeLabel && (
-              <span className="text-gray-400 ml-1">{changeLabel}</span>
-            )}
-          </div>
-        )}
-
-        {/* Bottom right positioned button */}
-        {showAddFunds && (
-          <button
-            onClick={onCtaClick}
-            className="absolute bottom-0 right-0 bg-amber-500 hover:bg-amber-600 text-black text-sm px-3 py-1 rounded-lg"
-          >
-            Add Funds
-          </button>
-        )}
       </div>
     </div>
   );

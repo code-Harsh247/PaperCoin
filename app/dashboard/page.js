@@ -320,6 +320,7 @@ export default function Dashboard() {
                   iconBg="bg-amber-500"
                   icon={Wallet}
                   ctaText="View Details"
+                  imgUrl="/Images/Balance.png"
                   onCtaClick={() => console.log("View total balance details")}
                 />
                 <BalanceCard
@@ -329,6 +330,7 @@ export default function Dashboard() {
                   changeLabel="this week"
                   iconBg="bg-blue-500"
                   icon={TrendingUp}
+                  imgUrl="/Images/bitcoins.png"
                   ctaText="View Details"
                   showBitcoinCount={true}
                   bitcoinCount={parseFloat(dashboardData.btc_coins)}

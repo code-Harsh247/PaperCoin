@@ -1,16 +1,15 @@
 'use client';
-import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { useOrderbook } from './OrderBookContext';
 import { useAuthStore } from '@/store/useAuthStore';
 import axios from 'axios';
 
-// Create the context
 const MatchingEngineContext = createContext();
-
-// Custom hook to use the matching engine context
 export const useMatchingEngine = () => useContext(MatchingEngineContext);
 
 export const MatchingEngineProvider = ({ children }) => {
+  console.log('[MatchingEngine] Provider rendering');
+  
   const { rawOrderbook, virtualOrders, fetchUserTrades } = useOrderbook();
   const { user } = useAuthStore();
   const [isProcessing, setIsProcessing] = useState(false);
@@ -20,195 +19,295 @@ export const MatchingEngineProvider = ({ children }) => {
     partialMatches: 0,
     totalVolume: 0
   });
+  
+  // Use refs to maintain stable references across renders
+  const intervalRef = useRef(null);
+  const processingRef = useRef(false);
+  const dataRef = useRef({
+    rawOrderbook: null,
+    virtualOrders: null,
+    user: null
+  });
+  
+  // Update refs whenever the actual values change
+  useEffect(() => {
+    dataRef.current = {
+      rawOrderbook,
+      virtualOrders,
+      user
+    };
+  }, [rawOrderbook, virtualOrders, user]);
 
-  // Function to update a trade in the database
-  const updateTrade = useCallback(async (tradeId, newFilledAmount, newStatus) => {
-    if (!user?.userId) return null;
+  // Process all potential matches in a batch
+  const processMatches = useCallback(async () => {
+    const { user, rawOrderbook, virtualOrders } = dataRef.current;
+    
+    if (!user?.userId || !rawOrderbook || !virtualOrders) {
+      console.log('[processMatches] Missing required data, skipping', {
+        hasUser: !!user?.userId,
+        hasRawOrderbook: !!rawOrderbook,
+        hasVirtualOrders: !!virtualOrders
+      });
+      return { bids: [], asks: [] };
+    }
+
+    console.log('[processMatches] Processing with data:', {
+      orderbook: `${rawOrderbook.bids.length} bids, ${rawOrderbook.asks.length} asks`,
+      virtualOrders: `${virtualOrders.bids.length} virtual bids, ${virtualOrders.asks.length} virtual asks`
+    });
+    
+    // First, collect all potential matches
+    const potentialMatches = [];
+    
+    // Check bids against asks
+    for (const virtualBid of virtualOrders.bids) {
+      if (!virtualBid.tradeId) continue;
+      
+      for (const realAsk of rawOrderbook.asks) {
+        const virtualPrice = parseFloat(virtualBid.price);
+        const realPrice = parseFloat(realAsk.price);
+        
+        // Price match check: bid price >= ask price
+        if (virtualPrice >= realPrice) {
+          potentialMatches.push({
+            tradeId: virtualBid.tradeId,
+            virtualAmount: parseFloat(virtualBid.amount),
+            realAmount: parseFloat(realAsk.amount),
+            price: realPrice,
+            side: 'bids'
+          });
+          break; // Match with best price only
+        }
+      }
+    }
+    
+    // Check asks against bids
+    for (const virtualAsk of virtualOrders.asks) {
+      if (!virtualAsk.tradeId) continue;
+      
+      for (const realBid of rawOrderbook.bids) {
+        const virtualPrice = parseFloat(virtualAsk.price);
+        const realPrice = parseFloat(realBid.price);
+        
+        // Price match check: ask price <= bid price
+        if (virtualPrice <= realPrice) {
+          potentialMatches.push({
+            tradeId: virtualAsk.tradeId,
+            virtualAmount: parseFloat(virtualAsk.amount),
+            realAmount: parseFloat(realBid.amount),
+            price: realPrice,
+            side: 'asks'
+          });
+          break; // Match with best price only
+        }
+      }
+    }
+    
+    console.log('[processMatches] Potential matches found:', potentialMatches.length);
+    console.log('[processMatches] Potential matches:', potentialMatches);
+    
+    // Get current status of all trades in one batch
+    const tradeIds = potentialMatches.map(match => match.tradeId);
+    
+    if (tradeIds.length === 0) {
+      return { bids: [], asks: [] };
+    }
     
     try {
-      const response = await axios.post('/api/trades/updateTrade', {
-        trade_id: tradeId,
-        filled_amount: newFilledAmount,
-        status: newStatus
+      console.log('[processMatches] Fetching trade details for:', tradeIds);
+      const tradesResponse = await axios.post('/api/trades/getBulkTrades', {
+        trade_ids: tradeIds
       });
       
-      return response.data;
-    } catch (error) {
-      console.error('Error updating trade:', error);
-      return null;
-    }
-  }, [user]);
-
-  // Process a potential match between a virtual order and a real order
-  const processMatch = useCallback(async (virtualOrder, realOrder, virtualOrderSide) => {
-    // Determine if this is a virtual bid matching with a real ask or vice versa
-    const isBuyMatch = virtualOrderSide === 'bids'; // Virtual bid matches with real ask
-    
-    const virtualPrice = parseFloat(virtualOrder.price);
-    const realPrice = parseFloat(realOrder.price);
-    const virtualAmount = parseFloat(virtualOrder.amount);
-    const realAmount = parseFloat(realOrder.amount);
-    
-    // For a match to occur:
-    // - If virtual bid: virtualPrice >= realPrice (willing to buy at this price or higher)
-    // - If virtual ask: virtualPrice <= realPrice (willing to sell at this price or lower)
-    const isPriceMatch = isBuyMatch ? 
-      virtualPrice >= realPrice : 
-      virtualPrice <= realPrice;
-    
-    if (!isPriceMatch) return null;
-    
-    // Calculate the amount that can be filled
-    const fillAmount = Math.min(virtualAmount, realAmount);
-    
-    // If we have a tradeId, update it in the database
-    if (virtualOrder.tradeId) {
-      // Get the current trade to calculate the new filled amount
-      try {
-        const tradesResponse = await axios.post('/api/trades/getTrade', {
-          trade_id: virtualOrder.tradeId
+      const trades = tradesResponse.data.trades || [];
+      console.log('[processMatches] Retrieved trades:', trades.length);
+      
+      const tradesMap = {};
+      trades.forEach(trade => {
+        tradesMap[trade.id] = trade;
+      });
+      
+      // Process each match
+      const results = { bids: [], asks: [] };
+      const tradesToUpdate = [];
+      
+      for (const match of potentialMatches) {
+        const trade = tradesMap[match.tradeId];
+        if (!trade || trade.status === 'filled' || trade.status === 'cancelled') {
+          console.log(`[processMatches] Skipping trade ${match.tradeId}: status=${trade?.status || 'not found'}`);
+          continue;
+        }
+        
+        const currentFilledAmount = parseFloat(trade.filled_amount || 0);
+        const tradeAmount = parseFloat(trade.amount);
+        const fillAmount = Math.min(match.virtualAmount, match.realAmount);
+        const newFilledAmount = currentFilledAmount + fillAmount;
+        const newStatus = newFilledAmount >= tradeAmount ? 'filled' : 'partially_filled';
+        
+        console.log(`[processMatches] Match found for trade ${match.tradeId}: ${fillAmount} @ ${match.price}`);
+        
+        tradesToUpdate.push({
+          trade_id: match.tradeId,
+          filled_amount: newFilledAmount,
+          status: newStatus
         });
         
-        const trade = tradesResponse.data.trade;
-        if (!trade) throw new Error('Trade not found');
-        
-        const currentFilledAmount = parseFloat(trade.filled_amount);
-        const newFilledAmount = currentFilledAmount + fillAmount;
-        const newStatus = newFilledAmount >= parseFloat(trade.amount) ? 'filled' : 'partially_filled';
-        
-        // Update the trade in the database
-        await updateTrade(
-          virtualOrder.tradeId,
-          newFilledAmount,
-          newStatus
-        );
-        
-        // Return match information
-        return {
-          virtualOrderId: virtualOrder.tradeId,
-          matchPrice: realPrice,
+        const matchResult = {
+          virtualOrderId: match.tradeId,
+          matchPrice: match.price,
           matchAmount: fillAmount,
-          remainingAmount: virtualAmount - fillAmount,
+          remainingAmount: tradeAmount - newFilledAmount,
           isFull: newStatus === 'filled',
-          executionPrice: isBuyMatch ? realPrice : virtualPrice // The price at which the order executes
+          executionPrice: match.price
         };
-      } catch (error) {
-        console.error('Error processing match:', error);
-        return null;
+        
+        if (match.side === 'bids') {
+          results.bids.push(matchResult);
+        } else {
+          results.asks.push(matchResult);
+        }
       }
+      
+      // Batch update trades
+      if (tradesToUpdate.length > 0) {
+        console.log('[processMatches] Updating trades:', tradesToUpdate);
+        await axios.post('/api/trades/updateBulkTrades', {
+          trades: tradesToUpdate
+        });
+      }
+      
+      return results;
+    } catch (error) {
+      console.error('[processMatches] Error processing matches:', error);
+      return { bids: [], asks: [] };
     }
-    
-    return null;
-  }, [updateTrade]);
+  }, []);
 
-  // Find matches for all virtual orders against the real orderbook
   const findMatches = useCallback(async () => {
-    if (isProcessing || !rawOrderbook || !virtualOrders) return;
-    
+    // Use ref to prevent concurrent processing
+    if (processingRef.current) {
+      console.log('[findMatches] Already processing, skipping');
+      return;
+    }
+
+    processingRef.current = true;
     setIsProcessing(true);
-    
+    console.log('[findMatches] Starting match process');
+
     try {
-      const matches = {
-        bids: [], // Matches for virtual bids
-        asks: [] // Matches for virtual asks
-      };
+      const matches = await processMatches();
       
-      // Process virtual bids against real asks
-      for (const virtualBid of virtualOrders.bids) {
-        for (const realAsk of rawOrderbook.asks) {
-          const match = await processMatch(virtualBid, realAsk, 'bids');
-          if (match) {
-            matches.bids.push(match);
-            // If fully matched, break out of the inner loop
-            if (match.isFull) break;
-          }
-        }
-      }
-      
-      // Process virtual asks against real bids
-      for (const virtualAsk of virtualOrders.asks) {
-        for (const realBid of rawOrderbook.bids) {
-          const match = await processMatch(virtualAsk, realBid, 'asks');
-          if (match) {
-            matches.asks.push(match);
-            // If fully matched, break out of the inner loop
-            if (match.isFull) break;
-          }
-        }
-      }
-      
-      // Calculate match statistics
       const fullMatches = [...matches.bids, ...matches.asks].filter(m => m.isFull).length;
       const partialMatches = [...matches.bids, ...matches.asks].filter(m => !m.isFull).length;
-      const totalVolume = [...matches.bids, ...matches.asks].reduce(
-        (sum, match) => sum + match.matchAmount, 0
-      );
+      const totalVolume = [...matches.bids, ...matches.asks].reduce((sum, match) => sum + match.matchAmount, 0);
+
+      console.log('[findMatches] Match results:', { fullMatches, partialMatches, totalVolume });
       
-      setMatchStats({
-        fullMatches,
-        partialMatches,
-        totalVolume
-      });
-      
-      setLastMatchResult({
-        matches,
-        timestamp: new Date().toISOString()
-      });
-      
-      // Refresh user trades to update the UI with new filled amounts
-      await fetchUserTrades();
-      
+      if (fullMatches > 0 || partialMatches > 0) {
+        setMatchStats(prev => ({
+          fullMatches: prev.fullMatches + fullMatches,
+          partialMatches: prev.partialMatches + partialMatches,
+          totalVolume: prev.totalVolume + totalVolume
+        }));
+        
+        setLastMatchResult({ 
+          matches, 
+          timestamp: new Date().toISOString() 
+        });
+        
+        await fetchUserTrades();
+      }
+
       return matches;
     } catch (error) {
-      console.error('Error finding matches:', error);
+      console.error('[findMatches] Error during match process:', error);
       return { bids: [], asks: [] };
     } finally {
       setIsProcessing(false);
+      processingRef.current = false;
+      console.log('[findMatches] Processing completed');
     }
-  }, [isProcessing, rawOrderbook, virtualOrders, processMatch, fetchUserTrades]);
+  }, [processMatches, fetchUserTrades]);
 
-  // Automatic matching at regular intervals
+  // Set up the interval with stable references
   useEffect(() => {
-    const matchInterval = setInterval(() => {
-      if (user?.userId) {
-        findMatches();
+    console.log('[MatchingEngine] Setting up interval effect, user:', user?.userId);
+    
+    // Clear any existing interval first
+    if (intervalRef.current) {
+      console.log('[MatchingEngine] Clearing existing interval');
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+    
+    if (user?.userId) {
+      console.log('[MatchingEngine] Starting new 3-second match interval');
+      intervalRef.current = setInterval(() => {
+        console.log('[MatchingEngine] Interval triggered at', new Date().toISOString());
+        findMatches().catch(err => console.error('[MatchingEngine] Interval error:', err));
+      }, 3000);
+    }
+    
+    return () => {
+      if (intervalRef.current) {
+        console.log('[MatchingEngine] Cleaning up interval on unmount');
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
       }
-    }, 2000); // Check for matches every 2 seconds
-    
-    return () => clearInterval(matchInterval);
-  }, [findMatches, user]);
+    };
+  }, [user?.userId, findMatches]);
 
-  // Cancel a trade
   const cancelTrade = useCallback(async (tradeId) => {
-    if (!user?.userId) return false;
-    
+    if (!dataRef.current.user?.userId) return false;
+
     try {
+      console.log(`[cancelTrade] Attempting to cancel trade ${tradeId}`);
       const response = await axios.post('/api/trades/cancelTrade', {
         trade_id: tradeId,
-        user_id: user.userId
+        user_id: dataRef.current.user.userId
       });
-      
-      // Refresh user trades to update the UI
-      await fetchUserTrades();
+
+      if (response.data.success) {
+        await fetchUserTrades();
+        console.log(`[cancelTrade] Trade ${tradeId} cancelled successfully`);
+      }
       
       return response.data.success;
     } catch (error) {
-      console.error('Error canceling trade:', error);
+      console.error('[cancelTrade] Error canceling trade:', error);
       return false;
     }
-  }, [user, fetchUserTrades]);
+  }, [fetchUserTrades]);
 
-  // Context value
-  const value = {
+  const resetStats = useCallback(() => {
+    console.log('[MatchingEngine] Resetting match stats');
+    setMatchStats({ fullMatches: 0, partialMatches: 0, totalVolume: 0 });
+  }, []);
+
+  // Create a stable value object with useRef
+  const valueRef = useRef({
     findMatches,
     cancelTrade,
-    isProcessing,
-    lastMatchResult,
-    matchStats
-  };
+    isProcessing: false,
+    lastMatchResult: null,
+    matchStats: { fullMatches: 0, partialMatches: 0, totalVolume: 0 },
+    resetStats
+  });
+
+  // Update the value ref when state changes
+  useEffect(() => {
+    valueRef.current = {
+      findMatches,
+      cancelTrade,
+      isProcessing,
+      lastMatchResult,
+      matchStats,
+      resetStats
+    };
+  }, [findMatches, cancelTrade, isProcessing, lastMatchResult, matchStats, resetStats]);
 
   return (
-    <MatchingEngineContext.Provider value={value}>
+    <MatchingEngineContext.Provider value={valueRef.current}>
       {children}
     </MatchingEngineContext.Provider>
   );
