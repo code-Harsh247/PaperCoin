@@ -47,11 +47,11 @@ export const BalanceCard = ({
       }
     };
 
-    ws.onerror = (err) => {
-      setConnected(false);
-      setError('Connection error');
-      console.error('WebSocket Error:', err);
-    };
+    // ws.onerror = (err) => {
+    //   setConnected(false);
+    //   setError('Connection error');
+    //   console.error('WebSocket Error:', err);
+    // };
 
     ws.onclose = () => {
       setConnected(false);
