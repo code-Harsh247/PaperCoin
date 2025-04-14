@@ -90,6 +90,7 @@ const PriceHeader = ({ symbol = 'btcusdt' }) => {
         <div className="text-sm flex items-center">
           <span className={`${isPriceUp ? 'text-green-500' : 'text-red-500'}`}>
             {isPriceUp ? '+' : ''}{formatPrice(priceData.priceChange)}
+            {/* console.log("Price Data Change",priceData.priceChange) */}
           </span>
           <span className={`ml-1 ${isPriceUp ? 'text-green-500' : 'text-red-500'}`}>
             ({isPriceUp ? '+' : ''}{priceData.priceChangePercent.toFixed(2)}%)
