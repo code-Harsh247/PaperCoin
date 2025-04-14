@@ -1,7 +1,13 @@
-'use client';
+"use client";
 
-import React, { useState, useEffect } from 'react';
-import { ArrowUp, ArrowDown, Wallet, TrendingUp, RefreshCw } from 'lucide-react';
+import React, { useState, useEffect } from "react";
+import {
+  ArrowUp,
+  ArrowDown,
+  Wallet,
+  TrendingUp,
+  RefreshCw,
+} from "lucide-react";
 
 // Balance Card Component
 export const BalanceCard = ({
@@ -12,10 +18,10 @@ export const BalanceCard = ({
   iconBg = "bg-amber-500",
   icon = Wallet,
   ctaText = "View Details",
-  onCtaClick = () => { },
+  onCtaClick = () => {},
   showAddFunds = false,
   showBitcoinCount = false,
-  bitcoinCount = "0"
+  bitcoinCount = "0",
 }) => {
   const Icon = icon;
   const isPositive = changePercentage >= 0;
@@ -29,7 +35,7 @@ export const BalanceCard = ({
     if (!showBitcoinCount) return;
 
     // Connect to Binance WebSocket for BTC/USDT ticker
-    const ws = new WebSocket('wss://stream.binance.com:9443/ws/btcusdt@ticker');
+    const ws = new WebSocket("wss://stream.binance.com:9443/ws/btcusdt@ticker");
 
     ws.onopen = () => {
       setConnected(true);
@@ -42,10 +48,11 @@ export const BalanceCard = ({
         // Store the current price for Bitcoin
         setBtcPrice(parseFloat(tickerData.c));
       } catch (err) {
-        setError('Error processing data');
-        console.error('Processing error:', err);
+        setError("Error processing data");
+        console.error("Processing error:", err);
       }
     };
+
 
     // ws.onerror = (err) => {
     //   setConnected(false);
@@ -64,12 +71,13 @@ export const BalanceCard = ({
   }, [showBitcoinCount]);
 
   // Calculate USD equivalent of Bitcoin
-  const usdEquivalent = showBitcoinCount && btcPrice > 0 ?
-    (parseFloat(bitcoinCount) * btcPrice).toLocaleString(undefined, {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2
-    }) :
-    "0.00";
+  const usdEquivalent =
+    showBitcoinCount && btcPrice > 0
+      ? (parseFloat(bitcoinCount) * btcPrice).toLocaleString(undefined, {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        })
+      : "0.00";
 
   return (
     <div className="bg-gradient-to-r from-gray-800 to-gray-900 rounded-xl shadow-lg p-6 border border-gray-700">
@@ -106,48 +114,42 @@ export const BalanceCard = ({
             </div>
           )}
         </div>
-        <div className={`p-3 ${iconBg} bg-opacity-20 rounded-lg`}>
-          <Icon className={`h-6 w-6 ${iconBg.replace('bg-', 'text-')}`} />
-        </div>
+        {/* <div className={`p-3 ${iconBg} bg-opacity-20 rounded-lg`}>
+          <Icon className={`h-6 w-6 ${iconBg.replace("bg-", "text-")}`} />
+        </div> */}
       </div>
 
-      <div className="flex justify-between items-center">
+      <div className="relative min-h-[10px]">
         {changePercentage !== null && (
-          <div>
-            <div className="flex items-center text-sm">
-              {isPositive ? (
-                <ArrowUp className="h-4 w-4 text-green-500 mr-1" />
-              ) : (
-                <ArrowDown className="h-4 w-4 text-red-500 mr-1" />
-              )}
-              <span className={isPositive ? "text-green-500" : "text-red-500"}>
-                {isPositive ? '+' : ''}{changePercentage}%
-              </span>
-              {changeLabel && <span className="text-gray-400 ml-1">{changeLabel}</span>}
-            </div>
+          <div className="flex items-center text-sm">
+            {isPositive ? (
+              <ArrowUp className="h-4 w-4 text-green-500 mr-1" />
+            ) : (
+              <ArrowDown className="h-4 w-4 text-red-500 mr-1" />
+            )}
+            <span className={isPositive ? "text-green-500" : "text-red-500"}>
+              {isPositive ? "+" : ""}
+              {changePercentage}%
+            </span>
+            {changeLabel && (
+              <span className="text-gray-400 ml-1">{changeLabel}</span>
+            )}
           </div>
         )}
-        {showAddFunds ? (
+
+        {/* Bottom right positioned button */}
+        {showAddFunds && (
           <button
             onClick={onCtaClick}
-            className="bg-amber-500 hover:bg-amber-600 text-black text-sm px-3 py-1 rounded-lg"
+            className="absolute bottom-0 right-0 bg-amber-500 hover:bg-amber-600 text-black text-sm px-3 py-1 rounded-lg"
           >
             Add Funds
-          </button>
-        ) : (
-          <button
-            onClick={onCtaClick}
-            className="text-amber-500 text-sm hover:text-amber-400"
-          >
-            {ctaText}
           </button>
         )}
       </div>
     </div>
   );
 };
-
-
 
 // Asset Card Component
 export const AssetCard = ({
@@ -156,13 +158,15 @@ export const AssetCard = ({
   price,
   changePercentage,
   amount,
-  color = "bg-yellow-500"
+  color = "bg-yellow-500",
 }) => {
   const isPositive = changePercentage >= 0;
 
   return (
     <div className="flex items-center p-3 bg-gray-700 bg-opacity-30 rounded-lg">
-      <div className={`w-8 h-8 ${color} rounded-full flex items-center justify-center mr-3`}>
+      <div
+        className={`w-8 h-8 ${color} rounded-full flex items-center justify-center mr-3`}
+      >
         <span className="text-xs font-bold">{symbol}</span>
       </div>
       <div className="flex-1">
@@ -171,7 +175,8 @@ export const AssetCard = ({
       </div>
       <div className="text-right">
         <p className={isPositive ? "text-green-500" : "text-red-500"}>
-          {isPositive ? '+' : ''}{changePercentage}%
+          {isPositive ? "+" : ""}
+          {changePercentage}%
         </p>
         <p className="text-white text-xs">{amount}</p>
       </div>
@@ -187,22 +192,22 @@ export const ActivityItem = ({
   date,
   time,
   status,
-  type
+  type,
 }) => {
   // Determine icon and colors based on activity type
   let icon = <TrendingUp className="h-5 w-5 text-blue-500" />;
   let bgColor = "bg-blue-500 bg-opacity-20";
   let textColor = "text-white";
 
-  if (type === 'buy') {
+  if (type === "buy") {
     icon = <ArrowUp className="h-5 w-5 text-green-500" />;
     bgColor = "bg-green-500 bg-opacity-20";
     textColor = "text-green-500";
-  } else if (type === 'sell') {
+  } else if (type === "sell") {
     icon = <ArrowDown className="h-5 w-5 text-red-500" />;
     bgColor = "bg-red-500 bg-opacity-20";
     textColor = "text-red-500";
-  } else if (type === 'deposit') {
+  } else if (type === "deposit") {
     icon = <Wallet className="h-5 w-5 text-amber-500" />;
     bgColor = "bg-amber-500 bg-opacity-20";
     textColor = "text-white";
@@ -210,7 +215,9 @@ export const ActivityItem = ({
 
   return (
     <div className="flex items-start p-4 bg-gray-700 bg-opacity-30 rounded-lg">
-      <div className={`w-10 h-10 ${bgColor} rounded-full flex items-center justify-center mr-4`}>
+      <div
+        className={`w-10 h-10 ${bgColor} rounded-full flex items-center justify-center mr-4`}
+      >
         {icon}
       </div>
       <div className="flex-1">
@@ -219,12 +226,18 @@ export const ActivityItem = ({
           <span className={textColor}>{amount}</span>
         </div>
         <div className="flex justify-between mt-1">
-          <p className="text-gray-400 text-xs">{date} • {time}</p>
-          <span className={
-            status === 'completed' ? "text-green-500 text-xs" :
-              status === 'pending' ? "text-amber-500 text-xs" :
-                "text-white text-xs"
-          }>
+          <p className="text-gray-400 text-xs">
+            {date} • {time}
+          </p>
+          <span
+            className={
+              status === "completed"
+                ? "text-green-500 text-xs"
+                : status === "pending"
+                ? "text-amber-500 text-xs"
+                : "text-white text-xs"
+            }
+          >
             {amountLabel}
           </span>
         </div>
@@ -241,7 +254,7 @@ export const CoinTableRow = ({
   change,
   marketCap,
   color = "bg-yellow-500",
-  onTradeClick
+  onTradeClick,
 }) => {
   const isPositive = change >= 0;
 
@@ -249,7 +262,9 @@ export const CoinTableRow = ({
     <tr className="bg-gray-800 hover:bg-gray-700">
       <td className="px-6 py-4 whitespace-nowrap">
         <div className="flex items-center">
-          <div className={`w-8 h-8 ${color} rounded-full flex items-center justify-center mr-3`}>
+          <div
+            className={`w-8 h-8 ${color} rounded-full flex items-center justify-center mr-3`}
+          >
             <span className="text-xs font-bold">{symbol}</span>
           </div>
           <div>
@@ -258,13 +273,18 @@ export const CoinTableRow = ({
           </div>
         </div>
       </td>
-      <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-white">{price}</td>
+      <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-white">
+        {price}
+      </td>
       <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-green-500">
         <span className={isPositive ? "text-green-500" : "text-red-500"}>
-          {isPositive ? '+' : ''}{change}%
+          {isPositive ? "+" : ""}
+          {change}%
         </span>
       </td>
-      <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-white">{marketCap}</td>
+      <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-white">
+        {marketCap}
+      </td>
       <td className="px-6 py-4 whitespace-nowrap text-right">
         <button
           onClick={onTradeClick}
@@ -278,21 +298,17 @@ export const CoinTableRow = ({
 };
 
 // Quick Action Button Component
-export const ActionButton = ({
-  icon,
-  label,
-  primary = false,
-  onClick
-}) => {
+export const ActionButton = ({ icon, label, primary = false, onClick }) => {
   const Icon = icon;
 
   return (
     <button
       onClick={onClick}
-      className={`w-full ${primary
+      className={`w-full ${
+        primary
           ? "bg-amber-500 hover:bg-amber-600 text-black"
           : "bg-gray-700 hover:bg-gray-600 text-white"
-        } font-medium py-3 rounded-lg transition-colors flex items-center justify-center`}
+      } font-medium py-3 rounded-lg transition-colors flex items-center justify-center`}
     >
       <Icon className="h-5 w-5 mr-2" />
       <span>{label}</span>
