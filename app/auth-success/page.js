@@ -1,59 +1,72 @@
 'use client'
-import React, { useEffect } from 'react'
+import React, { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { useAuthStore } from '@/store/useAuthStore' 
+import { useAuthStore } from '@/store/useAuthStore'
 
 export default function AuthSuccess() {
   const router = useRouter()
-  // Access the correct user state from your Zustand store
-  // You may need to adjust this selector based on your actual store structure
-  const user = useAuthStore(state => state.user)
+  const { user, setUser, setLoading } = useAuthStore()
+  const [isProcessing, setIsProcessing] = useState(true)
   
   // For debugging
   console.log('Initial user state:', user)
 
   useEffect(() => {
-    // Check for any URL parameters
-    console.log('User in effect:', user)
-    const params = new URLSearchParams(window.location.search)
-    const error = params.get('error')
-    
-    if (error) {
-      console.error('Authentication error from URL:', error)
-      router.push('/?auth=failed')
-      return
-    }
-
-    // Check user state with more detailed logging
-    if (!user) {
-      console.error('No user found in store')
-      
-      // Optional: Add a fallback check for user in localStorage or other sources
-      const fallbackUser = localStorage.getItem('auth_user')
-      if (fallbackUser) {
-        console.log('Found fallback user, proceeding with redirect')
-        redirectToDashboard()
-      } else {
-        console.log('No fallback user found, redirecting to auth failed')
-        router.push('/?auth=failed')
+    async function verifyAndFetchUser() {
+      try {
+        setLoading(true)
+        console.log('Starting auth verification')
+        
+        // Check for URL error parameters
+        const params = new URLSearchParams(window.location.search)
+        const error = params.get('error')
+        
+        if (error) {
+          console.error('Authentication error from URL:', error)
+          router.push('/login?error=auth_failed')
+          return
+        }
+        
+        // Get user data from the server using the HTTP-only cookie token
+        const response = await fetch('/api/auth/me')
+        
+        if (!response.ok) {
+          console.error('Failed to fetch user data:', await response.text())
+          router.push('/login?error=fetch_failed')
+          return
+        }
+        
+        const userData = await response.json()
+        console.log('User data fetched successfully:', userData)
+        
+        // The user object should match the structure expected by your app
+        const formattedUser = {
+          id: userData.userId || userData.id,
+          name: userData.name,
+          email: userData.email,
+          // Add any other fields your app expects
+        }
+        
+        // Update the Zustand store with the user data
+        setUser(formattedUser)
+        
+        // Start redirect to dashboard
+        console.log('Authentication successful, redirecting to dashboard...')
+        setTimeout(() => {
+          router.push('/dashboard')
+        }, 1500)
+      } catch (error) {
+        console.error('Authentication verification error:', error)
+        router.push('/login?error=verification_failed')
+      } finally {
+        setIsProcessing(false)
+        setLoading(false)
       }
-      return
     }
-
-    console.log('Authentication successful:', user)
-    console.log('Redirecting to dashboard...')
-    redirectToDashboard()
-  }, [router, user]) // Keep user in dependency array
+    
+    verifyAndFetchUser()
+  }, [router, setUser, setLoading])
   
-  // Extract redirect logic to a separate function for clarity
-  const redirectToDashboard = () => {
-    console.log('Starting redirect timeout...')
-    setTimeout(() => {
-      console.log('Timeout complete, pushing to dashboard...')
-      router.push('/dashboard')
-    }, 1500)
-  }
-
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-black p-4">
       <div className="bg-gray-900 rounded-xl p-8 max-w-md w-full text-center">
