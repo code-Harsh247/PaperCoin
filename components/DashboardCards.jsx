@@ -118,38 +118,31 @@ export const BalanceCard = ({
         </div> */}
       </div>
 
-      <div className="flex justify-between items-center">
+      <div className="relative min-h-[10px]">
         {changePercentage !== null && (
-          <div>
-            <div className="flex items-center text-sm">
-              {isPositive ? (
-                <ArrowUp className="h-4 w-4 text-green-500 mr-1" />
-              ) : (
-                <ArrowDown className="h-4 w-4 text-red-500 mr-1" />
-              )}
-              <span className={isPositive ? "text-green-500" : "text-red-500"}>
-                {isPositive ? "+" : ""}
-                {changePercentage}%
-              </span>
-              {changeLabel && (
-                <span className="text-gray-400 ml-1">{changeLabel}</span>
-              )}
-            </div>
+          <div className="flex items-center text-sm">
+            {isPositive ? (
+              <ArrowUp className="h-4 w-4 text-green-500 mr-1" />
+            ) : (
+              <ArrowDown className="h-4 w-4 text-red-500 mr-1" />
+            )}
+            <span className={isPositive ? "text-green-500" : "text-red-500"}>
+              {isPositive ? "+" : ""}
+              {changePercentage}%
+            </span>
+            {changeLabel && (
+              <span className="text-gray-400 ml-1">{changeLabel}</span>
+            )}
           </div>
         )}
-        {showAddFunds ? (
+
+        {/* Bottom right positioned button */}
+        {showAddFunds && (
           <button
             onClick={onCtaClick}
-            className="bg-amber-500 hover:bg-amber-600 text-black text-sm px-3 py-1 rounded-lg"
+            className="absolute bottom-0 right-0 bg-amber-500 hover:bg-amber-600 text-black text-sm px-3 py-1 rounded-lg"
           >
             Add Funds
-          </button>
-        ) : (
-          <button
-            onClick={onCtaClick}
-            className="text-amber-500 text-sm hover:text-amber-400"
-          >
-            {/* {ctaText} */}
           </button>
         )}
       </div>

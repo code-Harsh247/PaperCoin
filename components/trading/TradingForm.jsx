@@ -2,15 +2,56 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useOrderbook } from "@/Context/OrderBookContext";
+import axios from "axios"; // Import axios
+import { useAuthStore } from "@/store/useAuthStore";
 
 export default function TradingForm() {
   const { orderbook, addVirtualOrder, rawOrderbook, connected } = useOrderbook();
+  const [balance, setBalance] = useState({ USDT: 0, BTC: 0 }); // Initialize with default values
+  const { user } = useAuthStore();
+  
+  useEffect(() => {
+    const fetchFunds = async () => {
+      // Check if user exists before making the API call
+      if (!user || !user.userId) {
+        console.log("User not available yet, skipping funds fetch");
+        return;
+      }
+      
+      try {
+        const response = await axios.post("/api/getFunds", { user_id: user.userId });
+        if (response.status === 200) {
+          console.log("Funds fetched successfully in trading: ", response.data.funds);
+          
+          // Handle the array response structure correctly
+          const fundsData = response.data.funds;
+          
+          if (Array.isArray(fundsData) && fundsData.length > 0) {
+            // Extract data from the first element in the array
+            const userFunds = fundsData[0];
+            setBalance({
+              USDT: parseFloat(userFunds.available_funds) || 0,
+              BTC: parseFloat(userFunds.btccoins) || 0
+            });
+          } else if (typeof fundsData === 'object' && fundsData !== null) {
+            // Handle case where it might be a direct object
+            setBalance({
+              USDT: parseFloat(fundsData.available_funds) || 0,
+              BTC: parseFloat(fundsData.btccoins) || 0
+            });
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching funds:", error);
+      }
+    };
+    
+    fetchFunds();
+  }, [user]); // Fetch funds when user changes
 
-  // Mock balances - in a real app, these would come from a balances context or API
-  const balance = {
-    USDT: 10000,
-    BTC: 1.0,
-  };
+  useEffect(() => {
+    console.log("Balance updated:", balance);
+  }, [balance]);
 
   const [orderType, setOrderType] = useState("Limit");
   const [buyPrice, setBuyPrice] = useState("");
@@ -59,7 +100,7 @@ export default function TradingForm() {
   }, [rawOrderbook, buyPrice, sellPrice]);
 
   // Place buy order
-  const handleBuy = () => {
+  const handleBuy = async () => {
     setBuyError("");
 
     try {
@@ -80,7 +121,7 @@ export default function TradingForm() {
         );
       }
 
-      // Add virtual order using the context
+      // Original behavior: Add virtual order using the context
       addVirtualOrder("bids", finalPrice, parseInput(buyAmount));
       console.log("Buy order placed:", { price: finalPrice, amount: parseInput(buyAmount) });
       setBuyAmount("1"); // Reset to default of 1 BTC
@@ -90,7 +131,7 @@ export default function TradingForm() {
   };
 
   // Place sell order
-  const handleSell = () => {
+  const handleSell = async () => {
     setSellError("");
 
     try {
@@ -110,8 +151,10 @@ export default function TradingForm() {
 
       const finalPrice = orderType === "Market" ? marketPrice : parseInput(sellPrice);
 
-      // Add virtual order using the context
+      // Original behavior: Add virtual order using the context
       addVirtualOrder("asks", finalPrice, parseInput(sellAmount));
+      console.log("Sell order placed:", { price: finalPrice, amount: parseInput(sellAmount) });
+
       setSellAmount("1"); // Reset to default of 1 BTC
     } catch (error) {
       setSellError(error.message);
