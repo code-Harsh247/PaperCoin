@@ -113,6 +113,7 @@ export default function Dashboard() {
     const loadUser = async () => {
       try {
         const res = await fetch('/api/auth/me');
+        console.log("User response: ", res);
         if (res.ok) {
           const data = await res.json();
           setUser(data);

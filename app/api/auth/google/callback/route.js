@@ -2,7 +2,8 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { SignJWT } from 'jose';
-import { addUsertoDb } from '@/lib/db-utils'; 
+import { addUsertoDb, getUserId } from '@/lib/db-utils'; 
+import { runQuery } from '@/lib/db-utils'; // Import runQuery if it's not already included in db-utils
 
 export async function GET(request) {
   // Get the authorization code from the URL
@@ -50,14 +51,10 @@ export async function GET(request) {
 
     const userInfo = await userInfoResponse.json();
 
-
-
     if (!userInfoResponse.ok) {
       console.error('Failed to fetch user info:', userInfo);
       return NextResponse.redirect(`${process.env.NEXT_PUBLIC_APP_URL}/login?error=user_info_failed`);
     }
-
-    // console.log('User Info:', userInfo);
 
     // Format user info for database storage
     const dbUserInfo = {
@@ -69,22 +66,25 @@ export async function GET(request) {
 
     // Add or update user in the database
     try {
-      const dbUser = await addUsertoDb(dbUserInfo);
-      console.log('User added/updated in database:', dbUser);
+      const userId = await addUsertoDb(dbUserInfo);
+      console.log('User added/updated in database:', userId);
+      
+      // Initialize default funds only if the user doesn't already have an entry
+      const defaultFundQuery = `
+        INSERT INTO user_portfolios (user_id, total_balance, total_invested, available_funds, last_updated, btccoins)
+        VALUES ($1, 10000, 0, 10000, NOW(), 0)
+        ON CONFLICT (user_id) DO NOTHING;
+      `;
+      
+      await runQuery(defaultFundQuery, [userId]);
+      console.log('Default funds initialization attempted for user:', userId);
     } catch (dbError) {
       console.error('Database error:', dbError);
       // You can decide whether to fail the auth flow or continue
       // return NextResponse.redirect(`${process.env.NEXT_PUBLIC_APP_URL}/login?error=database_error`);
     }
-    // ADD user to database
 
-    // Here you would typically:
-    // 1. Check if the user exists in your database
-    // 2. Create a new user if they don't exist
-    // 3. Update user information if needed
-    // 4. Create a session or JWT token
-
-    // For this example, we'll create a simple JWT
+    // Create a JWT for authentication
     const jwt = await createJWT(userInfo);
 
     // Redirect to the frontend with the token
@@ -113,7 +113,7 @@ async function createJWT(userInfo) {
     sub: userInfo.sub,
     name: userInfo.name,
     email: userInfo.email,
-    picture: userInfo.picture,
+    userId: await getUserId(userInfo.email), // Assuming you have a function to get user ID from email
   })
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
