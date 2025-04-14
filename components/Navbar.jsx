@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useAuthStore } from "@/store/useAuthStore";
-import { useRouter } from 'next/navigation'
+import { useRouter } from "next/navigation";
 import {
   Menu,
   Bell,
@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 
 export default function Navbar({ user, activeTab, setActiveTab }) {
-  const router = useRouter()
+  const router = useRouter();
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -74,11 +74,11 @@ export default function Navbar({ user, activeTab, setActiveTab }) {
   // Navigation items - same as what was in sidebar
   const navItems = [
     { name: "Dashboard", icon: Home, path: "/dashboard", id: "dashboard" },
-    { name: "Markets", icon: BarChart2, path: "/markets", id: "markets" },
+    // { name: "Markets", icon: BarChart2, path: "/markets", id: "markets" },
     { name: "Trading", icon: TrendingUp, path: "/trading", id: "trading" },
-    { name: "Wallet", icon: Wallet, path: "/wallet", id: "wallet" },
+    // { name: "Wallet", icon: Wallet, path: "/wallet", id: "wallet" },
     { name: "History", icon: History, path: "/history", id: "history" },
-    { name: "Watchlist", icon: Heart, path: "/watchlist", id: "watchlist" },
+    // { name: "Watchlist", icon: Heart, path: "/watchlist", id: "watchlist" },
   ];
 
   const handleNavClick = (id) => {
