@@ -67,7 +67,7 @@ CREATE TABLE user_trades (
     price DECIMAL(18,8) NOT NULL,         -- Order price
     amount DECIMAL(18,8) NOT NULL,        -- Order amount
     filled_amount DECIMAL(18,8) DEFAULT 0,-- Amount already filled
-    status TEXT NOT NULL,                 -- 'open', 'filled', 'canceled', 'partial'
+    status TEXT NOT NULL,                 -- 'OPEN', 'FILLED', 'CANCELED', 'PARTIALLY_FILLED'
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

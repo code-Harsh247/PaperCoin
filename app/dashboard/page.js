@@ -169,6 +169,11 @@ export default function Dashboard() {
     }
   }, [loading, user, router]);
 
+
+  useEffect(() => {
+    console.log("User: ", user);
+  },[user]);
+
   // Fetch Users portfolio data
   useEffect(() => {
     async function fetchDashboardData() {
@@ -194,16 +199,8 @@ export default function Dashboard() {
     }
   }, [user]);
 
-  // Auto-hide success banner after 8 seconds
-  useEffect(() => {
-    if (showSuccessBanner) {
-      const timer = setTimeout(() => {
-        setShowSuccessBanner(false);
-      }, 1000);
-      
-      return () => clearTimeout(timer);
-    }
-  }, [showSuccessBanner]);
+  // Remove auto-hide for success banner
+  // Previous auto-hide useEffect has been removed
 
   const formatCurrency = (value) => {
     return new Intl.NumberFormat('en-US', {
@@ -228,10 +225,11 @@ export default function Dashboard() {
       fetchDashboardData();
     }
     
-    // Show success toast notification
-    showToast(`$${amount.toFixed(2)} added successfully to your account!`, 'success');
+    // Don't show the toast notification for fund additions
+    // The following line has been removed:
+    // showToast(`$${amount.toFixed(2)} added successfully to your account!`, 'success');
     
-    // Show highlight banner
+    // Show highlight banner (which will stay until manually closed)
     setAddedAmount(amount);
     setShowSuccessBanner(true);
   };
@@ -262,8 +260,8 @@ export default function Dashboard() {
   if (!user) return null;
 
   return (
-    <div className="flex h-screen bg-gray-900 overflow-hidden">
-      {/* Toast Notification */}
+    <div className="flex h-screen bg-[#111722] overflow-hidden">
+      {/* Toast Notification - kept for other notifications */}
       {toastConfig.visible && (
         <Toast 
           message={toastConfig.message} 
@@ -296,7 +294,7 @@ export default function Dashboard() {
               <p className="text-gray-400">Here's what's happening with your assets today.</p>
             </div>
             
-            {/* Success Banner */}
+            {/* Success Banner - now stays until manually closed */}
             {showSuccessBanner && (
               <HighlightBanner 
                 amount={addedAmount} 
