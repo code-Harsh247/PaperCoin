@@ -143,13 +143,13 @@ const OrderBookComponent = () => {
             Combined
           </button>
           <button 
-            className={`text-xs px-3 py-1.5 rounded-md transition-colors duration-200 ${displayMode === 'real' ? 'bg-blue-600 text-white' : 'bg-gray-700 hover:bg-gray-600'}`}
+            className={`text-xs px-3 py-1.5 rounded-md transition-colors duration-200 ${displayMode === 'real' ? 'bg-amber-500 text-white' : 'bg-gray-700 hover:bg-gray-600'}`}
             onClick={() => setDisplayMode('real')}
           >
             Real Only
           </button>
           <button 
-            className={`text-xs px-3 py-1.5 rounded-md transition-colors duration-200 ${displayMode === 'virtual' ? 'bg-blue-600 text-white' : 'bg-gray-700 hover:bg-gray-600'}`}
+            className={`text-xs px-3 py-1.5 rounded-md transition-colors duration-200 ${displayMode === 'virtual' ? 'bg-amber-500 text-white' : 'bg-gray-700 hover:bg-gray-600'}`}
             onClick={() => setDisplayMode('virtual')}
           >
             Virtual Only

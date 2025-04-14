@@ -1,13 +1,19 @@
 'use client'
-import React from 'react'
+import {useEffect} from 'react'
 import OrderBookComponent from '@/components/trading/OrderBookComponent'
 import CandleStickChart from '@/components/trading/CandleStickChart'
 import PriceHeader from '@/components/trading/PriceHeader'
 import OrderHistory from '@/components/trading/OrderHistory'
 import TradingForm from '@/components/trading/TradingForm'
+import { useAuthStore } from '@/store/useAuthStore'
 
 const Page = () => {
   const symbol = "btcusdt"; // Define your symbol here
+  const { user } = useAuthStore()
+
+  useEffect(() => {
+    console.log('User in trading:', user)
+  },[user])
 
   return (
     <div className='flex flex-col w-screen h-auto bg-[#111722]'>

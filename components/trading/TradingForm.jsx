@@ -2,10 +2,10 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useOrderbook } from "@/Context/OrderBookContext";
+import axios from "axios"; // Import axios
 
 export default function TradingForm() {
   const { orderbook, addVirtualOrder, rawOrderbook, connected } = useOrderbook();
-
   // Mock balances - in a real app, these would come from a balances context or API
   const balance = {
     USDT: 10000,
@@ -59,7 +59,7 @@ export default function TradingForm() {
   }, [rawOrderbook, buyPrice, sellPrice]);
 
   // Place buy order
-  const handleBuy = () => {
+  const handleBuy = async () => {
     setBuyError("");
 
     try {
@@ -80,9 +80,9 @@ export default function TradingForm() {
         );
       }
 
-      // Add virtual order using the context
+      // Original behavior: Add virtual order using the context
       addVirtualOrder("bids", finalPrice, parseInput(buyAmount));
-      console.log("Buy order placed:", { price: finalPrice, amount: parseInput(buyAmount) });
+      console.log("Buy order placed:", { price: finalPrice, amount: parseInput(buyAmount) });      
       setBuyAmount("1"); // Reset to default of 1 BTC
     } catch (error) {
       setBuyError(error.message);
@@ -90,7 +90,7 @@ export default function TradingForm() {
   };
 
   // Place sell order
-  const handleSell = () => {
+  const handleSell = async () => {
     setSellError("");
 
     try {
@@ -110,8 +110,10 @@ export default function TradingForm() {
 
       const finalPrice = orderType === "Market" ? marketPrice : parseInput(sellPrice);
 
-      // Add virtual order using the context
+      // Original behavior: Add virtual order using the context
       addVirtualOrder("asks", finalPrice, parseInput(sellAmount));
+      console.log("Sell order placed:", { price: finalPrice, amount: parseInput(sellAmount) });
+      
       setSellAmount("1"); // Reset to default of 1 BTC
     } catch (error) {
       setSellError(error.message);
