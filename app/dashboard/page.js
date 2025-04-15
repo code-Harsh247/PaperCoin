@@ -183,7 +183,7 @@ export default function Dashboard() {
         console.log(user)
         const response = await axios.post('/api/weeklySnapshots',
           {
-            email: user.email,
+            user_id: user.userId
           }
         );
         setDashboardData(response.data.dashboard);
@@ -234,6 +234,10 @@ export default function Dashboard() {
     setAddedAmount(amount);
     setShowSuccessBanner(true);
   };
+
+  useEffect(() => {
+    console.log("Dashboard Data: ", dashboardData);
+  },[dashboardData]);
 
   const fetchDashboardData = async () => {
     try {
@@ -315,8 +319,8 @@ export default function Dashboard() {
                 <BalanceCard
                   title="Total Balance"
                   amount={formatCurrency(dashboardData.total_balance)}
-                  changePercentage={parseFloat(dashboardData.weekly_balance_change_pct)}
-                  changeLabel="this week"
+                  changePercentage={parseFloat(dashboardData.daily_balance_change_pct)}
+                
                   iconBg="bg-amber-500"
                   icon={Wallet}
                   ctaText="View Details"
@@ -326,8 +330,8 @@ export default function Dashboard() {
                 <BalanceCard
                   title="Total Invested"
                   amount={formatCurrency(dashboardData.total_invested)}
-                  changePercentage={parseFloat(dashboardData.weekly_invested_change_pct)}
-                  changeLabel="this week"
+                  changePercentage={parseFloat(dashboardData.daily_invested_change_pct)}
+                  
                   iconBg="bg-blue-500"
                   icon={TrendingUp}
                   imgUrl="/Images/bitcoins.png"
@@ -340,8 +344,8 @@ export default function Dashboard() {
                 <BalanceCard
                   title="Available Funds"
                   amount={formatCurrency(dashboardData.available_funds)}
-                  changePercentage={parseFloat(dashboardData.weekly_available_change_pct)}
-                  changeLabel="this week"
+                  changePercentage={parseFloat(dashboardData.daily_available_change_pct)}
+                  
                   iconBg="bg-purple-500"
                   icon={Wallet}
                   showAddFunds={true}

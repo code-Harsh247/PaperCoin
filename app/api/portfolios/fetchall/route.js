@@ -8,7 +8,7 @@ export async function POST(req){
         if(!user_id){
             return NextResponse.json({ error: "User ID is required" }, { status: 400 });
         }
-        let query = `SELECT * FROM user_portfolios WHERE user_id = $1 ORDER BY last_updated DESC LIMIT 1`;
+        let query = `SELECT * FROM user_portfolios WHERE user_id = $1 ORDER BY last_updated DESC`;
         let values = [user_id];
         let result = await runQuery(query, values);
         if(result.length === 0){
