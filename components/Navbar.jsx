@@ -96,15 +96,9 @@ export default function Navbar({ user, activeTab, setActiveTab }) {
           <div className="flex items-center">
             {/* Logo */}
             <Link href="/dashboard" className="flex items-center mr-8">
-              <div className="text-amber-500 h-9 w-9 mr-2 flex items-center justify-center rounded-full bg-amber-500 bg-opacity-20">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 24 24"
-                  fill="currentColor"
-                  className="w-5 h-5"
-                >
-                  <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path>
-                </svg>
+              <div className="h-9 w-9">
+                <img src="/logo.png" className="w-full h-full object-contain"/>
+
               </div>
               <span className="text-white text-xl font-bold">PaperCoin</span>
             </Link>
