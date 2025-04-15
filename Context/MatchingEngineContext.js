@@ -8,8 +8,6 @@ const MatchingEngineContext = createContext();
 export const useMatchingEngine = () => useContext(MatchingEngineContext);
 
 export const MatchingEngineProvider = ({ children }) => {
-  console.log('[MatchingEngine] Provider rendering');
-  
   const { rawOrderbook, virtualOrders, fetchUserTrades } = useOrderbook();
   const { user } = useAuthStore();
   const [isProcessing, setIsProcessing] = useState(false);
@@ -19,8 +17,7 @@ export const MatchingEngineProvider = ({ children }) => {
     partialMatches: 0,
     totalVolume: 0
   });
-  
-  // Use refs to maintain stable references across renders
+
   const intervalRef = useRef(null);
   const processingRef = useRef(false);
   const dataRef = useRef({
@@ -28,8 +25,7 @@ export const MatchingEngineProvider = ({ children }) => {
     virtualOrders: null,
     user: null
   });
-  
-  // Update refs whenever the actual values change
+
   useEffect(() => {
     dataRef.current = {
       rawOrderbook,
@@ -38,36 +34,89 @@ export const MatchingEngineProvider = ({ children }) => {
     };
   }, [rawOrderbook, virtualOrders, user]);
 
-  // Process all potential matches in a batch
+  const updateUserPortfolio = useCallback(async (tradeInfo) => {
+    try {
+      const currentUser = dataRef.current.user;
+      if (!currentUser?.userId) return false;
+      console.log("[updateUserPortfolio] currentUser", currentUser);
+      
+      const portfolioResponse = await axios.post(`/api/portfolios/fetch`, {
+        user_id: currentUser.userId
+      });
+      
+      // Handle portfolio as array - get the first item
+      const portfolioArray = portfolioResponse.data.portfolio;
+      console.log("[updateUserPortfolio] portfolio fetched : ", portfolioArray);
+      
+      if (!portfolioArray || !Array.isArray(portfolioArray) || portfolioArray.length === 0) {
+        console.error("[updateUserPortfolio] No portfolio found or invalid format");
+        return false;
+      }
+      
+      // Get the first portfolio from the array
+      const portfolio = portfolioArray[0];
+      
+      const { side, amount, price } = tradeInfo;
+      const tradeValue = amount * price;
+      
+      console.log("[updateUserPortfolio] trade info for updating portfolio : ", tradeInfo);
+      
+      // Create a new portfolio object
+      let newPortfolio = { ...portfolio };
+      
+      // Safely parse values to handle potential string formats and NaN values
+      const currentBtcCoins = parseFloat(portfolio.btccoins || 0);
+      const currentFunds = parseFloat(portfolio.available_funds || 0);
+      const currentTotalInvested = parseFloat(portfolio.total_invested || 0);
+      
+      if (side === 'bids') {
+        newPortfolio.btccoins = currentBtcCoins + amount;
+        newPortfolio.available_funds = currentFunds - tradeValue;
+        newPortfolio.total_invested = currentTotalInvested + tradeValue;
+        console.log("[updateUserPortfolio] new btccoins", newPortfolio.btccoins);
+        console.log("[updateUserPortfolio] new available funds", newPortfolio.available_funds);
+      } else {
+        newPortfolio.btccoins = currentBtcCoins - amount;
+        newPortfolio.available_funds = currentFunds + tradeValue;
+        newPortfolio.total_invested = currentTotalInvested - tradeValue;
+      }
+      
+      // Calculate total balance with safeguards against NaN
+      newPortfolio.total_balance = parseFloat(newPortfolio.available_funds || 0) + 
+                                 (parseFloat(newPortfolio.btccoins || 0) * price);
+      
+      // Ensure no NaN values are sent to API
+      newPortfolio.btccoins = isNaN(newPortfolio.btccoins) ? 0 : newPortfolio.btccoins;
+      newPortfolio.available_funds = isNaN(newPortfolio.available_funds) ? 0 : newPortfolio.available_funds;
+      newPortfolio.total_balance = isNaN(newPortfolio.total_balance) ? 0 : newPortfolio.total_balance;
+      
+      newPortfolio.last_updated = new Date().toISOString();
+      console.log("[updateUserPortfolio] newPortfolio : ", newPortfolio);
+      
+      const updateResponse = await axios.post(`/api/portfolios/update`, {
+        user_id: currentUser.userId,
+        portfolio: newPortfolio
+      });
+      
+      console.log("[updateUserPortfolio] portfolio updated : ", updateResponse.data);
+      return true;
+    } catch (error) {
+      console.error("[updateUserPortfolio] Error:", error);
+      return false;
+    }
+  }, []);
+
   const processMatches = useCallback(async () => {
     const { user, rawOrderbook, virtualOrders } = dataRef.current;
-    
-    if (!user?.userId || !rawOrderbook || !virtualOrders) {
-      console.log('[processMatches] Missing required data, skipping', {
-        hasUser: !!user?.userId,
-        hasRawOrderbook: !!rawOrderbook,
-        hasVirtualOrders: !!virtualOrders
-      });
-      return { bids: [], asks: [] };
-    }
+    if (!user?.userId || !rawOrderbook || !virtualOrders) return { bids: [], asks: [] };
 
-    console.log('[processMatches] Processing with data:', {
-      orderbook: `${rawOrderbook.bids.length} bids, ${rawOrderbook.asks.length} asks`,
-      virtualOrders: `${virtualOrders.bids.length} virtual bids, ${virtualOrders.asks.length} virtual asks`
-    });
-    
-    // First, collect all potential matches
     const potentialMatches = [];
-    
-    // Check bids against asks
+
     for (const virtualBid of virtualOrders.bids) {
       if (!virtualBid.tradeId) continue;
-      
       for (const realAsk of rawOrderbook.asks) {
         const virtualPrice = parseFloat(virtualBid.price);
         const realPrice = parseFloat(realAsk.price);
-        
-        // Price match check: bid price >= ask price
         if (virtualPrice >= realPrice) {
           potentialMatches.push({
             tradeId: virtualBid.tradeId,
@@ -76,20 +125,16 @@ export const MatchingEngineProvider = ({ children }) => {
             price: realPrice,
             side: 'bids'
           });
-          break; // Match with best price only
+          break;
         }
       }
     }
-    
-    // Check asks against bids
+
     for (const virtualAsk of virtualOrders.asks) {
       if (!virtualAsk.tradeId) continue;
-      
       for (const realBid of rawOrderbook.bids) {
         const virtualPrice = parseFloat(virtualAsk.price);
         const realPrice = parseFloat(realBid.price);
-        
-        // Price match check: ask price <= bid price
         if (virtualPrice <= realPrice) {
           potentialMatches.push({
             tradeId: virtualAsk.tradeId,
@@ -98,60 +143,50 @@ export const MatchingEngineProvider = ({ children }) => {
             price: realPrice,
             side: 'asks'
           });
-          break; // Match with best price only
+          break;
         }
       }
     }
-    
-    console.log('[processMatches] Potential matches found:', potentialMatches.length);
-    console.log('[processMatches] Potential matches:', potentialMatches);
-    
-    // Get current status of all trades in one batch
+
     const tradeIds = potentialMatches.map(match => match.tradeId);
-    
-    if (tradeIds.length === 0) {
-      return { bids: [], asks: [] };
-    }
-    
+    if (tradeIds.length === 0) return { bids: [], asks: [] };
+
     try {
-      console.log('[processMatches] Fetching trade details for:', tradeIds);
       const tradesResponse = await axios.post('/api/trades/getBulkTrades', {
         trade_ids: tradeIds
       });
-      
       const trades = tradesResponse.data.trades || [];
-      console.log('[processMatches] Retrieved trades:', trades.length);
-      
       const tradesMap = {};
       trades.forEach(trade => {
         tradesMap[trade.id] = trade;
       });
-      
-      // Process each match
+
       const results = { bids: [], asks: [] };
       const tradesToUpdate = [];
-      
+      const portfolioUpdates = [];
+
       for (const match of potentialMatches) {
         const trade = tradesMap[match.tradeId];
-        if (!trade || trade.status === 'filled' || trade.status === 'cancelled') {
-          console.log(`[processMatches] Skipping trade ${match.tradeId}: status=${trade?.status || 'not found'}`);
-          continue;
-        }
-        
+        if (!trade || trade.status === 'filled' || trade.status === 'cancelled') continue;
+
         const currentFilledAmount = parseFloat(trade.filled_amount || 0);
         const tradeAmount = parseFloat(trade.amount);
         const fillAmount = Math.min(match.virtualAmount, match.realAmount);
         const newFilledAmount = currentFilledAmount + fillAmount;
         const newStatus = newFilledAmount >= tradeAmount ? 'filled' : 'partially_filled';
-        
-        console.log(`[processMatches] Match found for trade ${match.tradeId}: ${fillAmount} @ ${match.price}`);
-        
+
         tradesToUpdate.push({
           trade_id: match.tradeId,
           filled_amount: newFilledAmount,
           status: newStatus
         });
-        
+
+        portfolioUpdates.push({
+          side: match.side,
+          amount: fillAmount,
+          price: match.price
+        });
+
         const matchResult = {
           virtualOrderId: match.tradeId,
           matchPrice: match.price,
@@ -160,97 +195,79 @@ export const MatchingEngineProvider = ({ children }) => {
           isFull: newStatus === 'filled',
           executionPrice: match.price
         };
-        
+
         if (match.side === 'bids') {
           results.bids.push(matchResult);
         } else {
           results.asks.push(matchResult);
         }
       }
-      
-      // Batch update trades
+
       if (tradesToUpdate.length > 0) {
-        console.log('[processMatches] Updating trades:', tradesToUpdate);
         await axios.post('/api/trades/updateBulkTrades', {
           trades: tradesToUpdate
         });
       }
-      
+
+      for (const update of portfolioUpdates) {
+        await updateUserPortfolio({
+          side: update.side,
+          amount: update.amount,
+          price: update.price
+        });
+      }
+
       return results;
-    } catch (error) {
-      console.error('[processMatches] Error processing matches:', error);
+    } catch {
       return { bids: [], asks: [] };
     }
-  }, []);
+  }, [updateUserPortfolio]);
 
   const findMatches = useCallback(async () => {
-    // Use ref to prevent concurrent processing
-    if (processingRef.current) {
-      console.log('[findMatches] Already processing, skipping');
-      return;
-    }
+    if (processingRef.current) return;
 
     processingRef.current = true;
     setIsProcessing(true);
-    console.log('[findMatches] Starting match process');
 
     try {
       const matches = await processMatches();
-      
       const fullMatches = [...matches.bids, ...matches.asks].filter(m => m.isFull).length;
       const partialMatches = [...matches.bids, ...matches.asks].filter(m => !m.isFull).length;
       const totalVolume = [...matches.bids, ...matches.asks].reduce((sum, match) => sum + match.matchAmount, 0);
 
-      console.log('[findMatches] Match results:', { fullMatches, partialMatches, totalVolume });
-      
       if (fullMatches > 0 || partialMatches > 0) {
         setMatchStats(prev => ({
           fullMatches: prev.fullMatches + fullMatches,
           partialMatches: prev.partialMatches + partialMatches,
           totalVolume: prev.totalVolume + totalVolume
         }));
-        
-        setLastMatchResult({ 
-          matches, 
-          timestamp: new Date().toISOString() 
-        });
-        
+        setLastMatchResult({ matches, timestamp: new Date().toISOString() });
         await fetchUserTrades();
       }
 
       return matches;
-    } catch (error) {
-      console.error('[findMatches] Error during match process:', error);
+    } catch {
       return { bids: [], asks: [] };
     } finally {
       setIsProcessing(false);
       processingRef.current = false;
-      console.log('[findMatches] Processing completed');
     }
   }, [processMatches, fetchUserTrades]);
 
-  // Set up the interval with stable references
   useEffect(() => {
-    console.log('[MatchingEngine] Setting up interval effect, user:', user?.userId);
-    
-    // Clear any existing interval first
     if (intervalRef.current) {
-      console.log('[MatchingEngine] Clearing existing interval');
       clearInterval(intervalRef.current);
       intervalRef.current = null;
     }
-    
+
     if (user?.userId) {
-      console.log('[MatchingEngine] Starting new 3-second match interval');
       intervalRef.current = setInterval(() => {
-        console.log('[MatchingEngine] Interval triggered at', new Date().toISOString());
-        findMatches().catch(err => console.error('[MatchingEngine] Interval error:', err));
+        findMatches().catch(() => {});
       }, 3000);
     }
-    
+
     return () => {
       if (intervalRef.current) {
-        console.log('[MatchingEngine] Cleaning up interval on unmount');
         clearInterval(intervalRef.current);
         intervalRef.current = null;
       }
@@ -261,7 +278,6 @@ export const MatchingEngineProvider = ({ children }) => {
     if (!dataRef.current.user?.userId) return false;
 
     try {
-      console.log(`[cancelTrade] Attempting to cancel trade ${tradeId}`);
       const response = await axios.post('/api/trades/cancelTrade', {
         trade_id: tradeId,
         user_id: dataRef.current.user.userId
@@ -269,22 +285,18 @@ export const MatchingEngineProvider = ({ children }) => {
 
       if (response.data.success) {
         await fetchUserTrades();
-        console.log(`[cancelTrade] Trade ${tradeId} cancelled successfully`);
       }
-      
+
       return response.data.success;
-    } catch (error) {
-      console.error('[cancelTrade] Error canceling trade:', error);
+    } catch {
       return false;
     }
   }, [fetchUserTrades]);
 
   const resetStats = useCallback(() => {
-    console.log('[MatchingEngine] Resetting match stats');
     setMatchStats({ fullMatches: 0, partialMatches: 0, totalVolume: 0 });
   }, []);
 
-  // Create a stable value object with useRef
   const valueRef = useRef({
     findMatches,
     cancelTrade,
@@ -294,7 +306,6 @@ export const MatchingEngineProvider = ({ children }) => {
     resetStats
   });
 
-  // Update the value ref when state changes
   useEffect(() => {
     valueRef.current = {
       findMatches,
