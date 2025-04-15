@@ -92,7 +92,7 @@ const MarketOverview = () => {
     Promise.all(
       coin.map(async (coin) => {
         const data = await fetchData(coin);
-        console.log(data); // Log the fetched data
+        // console.log(data); // Log the fetched data
         return {
           name: coin.name,
           symbol: data.symbol,
@@ -108,7 +108,7 @@ const MarketOverview = () => {
     }); // Handle asynchronous operations properly
   }, []); // Run only once on component mount
 
-  console.log(coins); // Log the coins state
+  // console.log(coins); // Log the coins state
   // Filter coins based on selected filter
   const filteredCoins = coins.filter((coin) => {
     if (filter === "All") return true;
@@ -117,9 +117,9 @@ const MarketOverview = () => {
     return true;
   });
 
-  const handleTradeClick = (coinName) => {
-    console.log(`Trade ${coinName}`);
-  };
+  // const handleTradeClick = (coinName) => {
+  //   console.log(`Trade ${coinName}`);
+  // };
 
   return (
     <div className="mb-8">
