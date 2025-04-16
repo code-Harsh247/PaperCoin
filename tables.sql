@@ -103,3 +103,42 @@ SELECT add_compression_policy('orderbook_snapshots', INTERVAL '7 days');
 
 -- Optional: Retain only 6 months of data
 SELECT add_retention_policy('orderbook_snapshots', INTERVAL '180 days');
+
+
+CREATE TABLE candlestick_data (
+    time TIMESTAMPTZ NOT NULL,
+    symbol VARCHAR(20) NOT NULL,
+    interval VARCHAR(5) NOT NULL,
+    open NUMERIC(18, 8) NOT NULL,
+    high NUMERIC(18, 8) NOT NULL,
+    low NUMERIC(18, 8) NOT NULL,
+    close NUMERIC(18, 8) NOT NULL,
+    volume NUMERIC(25, 8) NOT NULL
+);
+
+
+-- Add indexes for faster queries
+CREATE INDEX idx_candlestick_symbol ON candlestick_data (symbol);
+CREATE INDEX idx_candlestick_interval ON candlestick_data (interval);
+
+-- Convert to hypertable with time partitioning
+SELECT create_hypertable('candlestick_data', 'time', 
+                         chunk_time_interval => INTERVAL '1 day');
+
+
+-- Set chunk size to 1 day for high-frequency intervals (like 1m, 5m)
+-- and a larger interval for lower frequency data
+SELECT set_chunk_time_interval('candlestick_data', INTERVAL '1 day');
+
+-- Enable compression with proper ordering to optimize query patterns
+ALTER TABLE candlestick_data SET (
+    timescaledb.compress,
+    timescaledb.compress_segmentby = 'symbol,interval',
+    timescaledb.compress_orderby = 'time DESC'
+);
+
+-- Create compression policy (compress chunks older than 3 days)
+SELECT add_compression_policy('candlestick_data', INTERVAL '3 days');
+
+-- Create retention policy (remove data older than 1 year)
+SELECT add_retention_policy('candlestick_data', INTERVAL '180 days');
