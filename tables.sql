@@ -77,3 +77,29 @@ SELECT create_hypertable('user_trades', 'created_at');
 
 -- Index for frequent queries
 CREATE INDEX idx_user_trades_user_symbol_status ON user_trades(user_id, symbol, status);
+
+
+CREATE TABLE orderbook_snapshots (
+  id BIGSERIAL,
+  timestamp TIMESTAMPTZ NOT NULL,
+  bids JSONB NOT NULL,
+  asks JSONB NOT NULL,
+  PRIMARY KEY (timestamp, id)
+);
+
+-- Turn into hypertable with 1-day chunks
+SELECT create_hypertable('orderbook_snapshots', 'timestamp', chunk_time_interval => interval '1 day');
+
+CREATE INDEX ON orderbook_snapshots (timestamp DESC);
+
+-- Enable compression
+ALTER TABLE btc_orderbook_snapshots SET (
+  timescaledb.compress,
+  timescaledb.compress_orderby = 'timestamp DESC'
+);
+
+-- Auto compress data older than 7 days
+SELECT add_compression_policy('orderbook_snapshots', INTERVAL '7 days');
+
+-- Optional: Retain only 6 months of data
+SELECT add_retention_policy('orderbook_snapshots', INTERVAL '180 days');
