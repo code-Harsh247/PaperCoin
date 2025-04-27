@@ -206,13 +206,16 @@ const OrderHistory = () => {
             ) : (
               <tr>
                 <td colSpan={columns.length} className="text-center py-4 text-gray-400">
-                  No trades found.
+                  No active trades found. Start trading to see your orders here.
                 </td>
               </tr>
             )}
           </tbody>
         </table>
       </div>
+      
+      {/* Added empty space below when trades are available */}
+      {trades.length > 0 && <div className="h-16"></div>}
     </div>
   );
 };

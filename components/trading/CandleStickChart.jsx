@@ -5,6 +5,7 @@ import * as am5 from '@amcharts/amcharts5';
 import * as am5xy from '@amcharts/amcharts5/xy';
 import am5themes_Animated from '@amcharts/amcharts5/themes/Animated';
 import am5themes_Dark from '@amcharts/amcharts5/themes/Dark';
+import { useBacktest } from '@/Context/BacktestContext';
 
 const CandleStickChart = ({ symbol = 'btcusdt', defaultInterval = '1d' }) => {
   const [interval, setInterval] = useState(defaultInterval);
@@ -13,6 +14,7 @@ const CandleStickChart = ({ symbol = 'btcusdt', defaultInterval = '1d' }) => {
   const candleSeriesRef = useRef(null);
   const volumeSeriesRef = useRef(null);
   const [chartData, setChartData] = useState([]);
+  const { backtestActive, backtestConfig } = useBacktest(); // Get backtest state from context
 
   // Available intervals
   const intervals = [
