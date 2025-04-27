@@ -274,7 +274,7 @@ const fetchUserTrades = useCallback(async () => {
     ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
-        console.log('WebSocket message received:', data);
+        if(backtestActive) console.log("Backtest data: ",data);
         // Process the orderbook data
         if (!data.bids || !data.asks) {
           console.warn('Skipping message: missing bids or asks');

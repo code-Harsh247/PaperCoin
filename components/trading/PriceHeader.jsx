@@ -128,6 +128,7 @@ const PriceHeader = ({ symbol = 'btcusdt' }) => {
     const startDateTime = formatUTC(start);
     const endDateTime = formatUTC(end);
     const config = { startDateTime, endDateTime, speed };
+    console.log('Backtest Config:', config );
     startBacktest(config); // ✅ Start backtest with config
     setShowBacktestModal(false);
   };
@@ -215,7 +216,7 @@ const PriceHeader = ({ symbol = 'btcusdt' }) => {
 
       {/* Backtest Modal */}
       {showBacktestModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center backdrop-blur-md bg-black/40">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
           <div className="bg-[#1E2530] border border-gray-700 rounded-lg shadow-xl w-full max-w-md p-6">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-xl font-semibold text-white">Backtest Configuration</h3>

@@ -87,13 +87,13 @@ CREATE TABLE orderbook_snapshots (
   PRIMARY KEY (timestamp, id)
 );
 
--- Turn into hypertable with 1-day chunks
+-- Turn into hypertable
 SELECT create_hypertable('orderbook_snapshots', 'timestamp', chunk_time_interval => interval '1 day');
 
 CREATE INDEX ON orderbook_snapshots (timestamp DESC);
 
 -- Enable compression
-ALTER TABLE btc_orderbook_snapshots SET (
+ALTER TABLE orderbook_snapshots SET (
   timescaledb.compress,
   timescaledb.compress_orderby = 'timestamp DESC'
 );
@@ -122,8 +122,8 @@ CREATE INDEX idx_candlestick_symbol ON candlestick_data (symbol);
 CREATE INDEX idx_candlestick_interval ON candlestick_data (interval);
 
 -- Convert to hypertable with time partitioning
-SELECT create_hypertable('candlestick_data', 'time', 
-                         chunk_time_interval => INTERVAL '1 day');
+SELECT create_hypertable('candlestick_data', 'time', chunk_time_interval =>
+ INTERVAL '1 day');
 
 
 -- Set chunk size to 1 day for high-frequency intervals (like 1m, 5m)
