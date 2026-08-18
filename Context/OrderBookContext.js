@@ -4,249 +4,93 @@ import { useAuthStore } from '@/store/useAuthStore';
 import axios from 'axios';
 import { useBacktest } from './BacktestContext';
 import useReconnectingWebSocket from '@/lib/useReconnectingWebSocket';
-// Create the context
+
+// Displays the live Binance book, overlaid with the user's own open orders
+// from the server engine. This context no longer places or matches anything —
+// the engine process owns fills; the UI only renders state and asks for
+// refreshes.
 const OrderbookContext = createContext();
 
-// Custom hook to use the orderbook context
 export const useOrderbook = () => useContext(OrderbookContext);
 
 export const OrderbookProvider = ({ symbol, children }) => {
   const [orderbook, setOrderbook] = useState({
     bids: [], // Array of {price, amount, total, isVirtual}
-    asks: [], // Array of {price, amount, total, isVirtual}
-    lastUpdateId: 0
+    asks: [],
+    lastUpdateId: 0,
   });
   const { user } = useAuthStore();
-  const [virtualOrders, setVirtualOrders] = useState({
-    bids: [], // Array of {price, amount, isVirtual: true}
-    asks: [], // Array of {price, amount, isVirtual: true}
-  });
+  const [virtualOrders, setVirtualOrders] = useState({ bids: [], asks: [] });
   const { backtestActive, backtestConfig } = useBacktest();
   const [error, setError] = useState(null);
-  const [isLoadingTrades, setIsLoadingTrades] = useState(false); 
-  // Calculate totals for the orderbook entries
+
   const calculateTotals = useCallback((entries) => {
     let runningTotal = 0;
-    return entries.map(entry => {
+    return entries.map((entry) => {
       runningTotal += parseFloat(entry.amount);
       return { ...entry, total: runningTotal };
     });
   }, []);
 
-
-
-  // Merge real orderbook with virtual orders and sort appropriately
   const mergeOrderbooks = useCallback(() => {
-    // Clone real orderbook entries and mark them as real
-    const realBids = orderbook.bids.map(bid => ({ ...bid, isVirtual: false }));
-    const realAsks = orderbook.asks.map(ask => ({ ...ask, isVirtual: false }));
+    const realBids = orderbook.bids.map((bid) => ({ ...bid, isVirtual: false }));
+    const realAsks = orderbook.asks.map((ask) => ({ ...ask, isVirtual: false }));
 
-    // Combine real and virtual orders
     const combinedBids = [...realBids, ...virtualOrders.bids];
     const combinedAsks = [...realAsks, ...virtualOrders.asks];
 
-    // Sort bids in descending order (highest price first)
     const sortedBids = combinedBids
       .sort((a, b) => parseFloat(b.price) - parseFloat(a.price))
-      .slice(0, 20); // Keep top 20
-
-    // Sort asks in ascending order (lowest price first)
+      .slice(0, 20);
     const sortedAsks = combinedAsks
       .sort((a, b) => parseFloat(a.price) - parseFloat(b.price))
-      .slice(0, 20); // Keep top 20
-
-    // Calculate running totals
-    const bidsWithTotals = calculateTotals(sortedBids);
-    const asksWithTotals = calculateTotals(sortedAsks);
+      .slice(0, 20);
 
     return {
-      bids: bidsWithTotals,
-      asks: asksWithTotals,
-      lastUpdateId: orderbook.lastUpdateId
+      bids: calculateTotals(sortedBids),
+      asks: calculateTotals(sortedAsks),
+      lastUpdateId: orderbook.lastUpdateId,
     };
   }, [orderbook, virtualOrders, calculateTotals]);
 
-  // Add a virtual order to the orderbook and save to database
-  const addVirtualOrder = useCallback(async (side, price, amount) => {
-    const sideKey = side.toLowerCase();
-    if (sideKey !== 'bids' && sideKey !== 'asks') {
-      console.error("Side must be 'bids' or 'asks'");
+  // The user's open orders on the engine, shown as the "virtual" overlay in
+  // the book. Remaining quantity only — the filled part is no longer resting.
+  const refreshOrders = useCallback(async () => {
+    if (!user?.userId) {
+      setVirtualOrders({ bids: [], asks: [] });
       return;
     }
-
-    // Convert side name to trade_type (bid/ask) for database
-    const trade_type = sideKey === 'bids' ? 'bid' : 'ask';
-
-    console.log(`Adding virtual order: ${sideKey} - Price: ${price}, Amount: ${amount}`);
-
-    // First update virtual orders for immediate UI feedback
-    setVirtualOrders(prev => {
-      // Check if order at this price already exists
-      const existingOrderIndex = prev[sideKey].findIndex(
-        order => parseFloat(order.price) === parseFloat(price)
-      );
-
-      let newOrders;
-      if (existingOrderIndex >= 0) {
-        // Update existing order
-        newOrders = [...prev[sideKey]];
-        const oldAmount = parseFloat(newOrders[existingOrderIndex].amount);
-        const newAmount = oldAmount + parseFloat(amount);
-
-        if (newAmount <= 0) {
-          // Remove the order if amount becomes zero or negative
-          newOrders.splice(existingOrderIndex, 1);
-        } else {
-          // Update the amount
-          newOrders[existingOrderIndex] = {
-            ...newOrders[existingOrderIndex],
-            amount: newAmount.toString()
-          };
-        }
-      } else if (parseFloat(amount) > 0) {
-        // Add new order only if amount is positive
-        newOrders = [
-          ...prev[sideKey],
-          {
-            price: price.toString(),
-            amount: amount.toString(),
-            isVirtual: true
-          }
-        ];
-      } else {
-        // Don't add new orders with negative or zero amount
-        return prev;
-      }
-
-      return {
-        ...prev,
-        [sideKey]: newOrders
-      };
-    });
-
-    // Only proceed to save in database if we have a user and positive amount
-
     try {
-      // Save the trade to database using Axios
-      const response = await axios.post('/api/trades/makeTrade', {
-        user_id: user.userId,
-        trade_type,
-        price: parseFloat(price),
-        amount: parseFloat(amount),
-        filled_amount: 0, // New orders start with no filled amount
-        status: 'open' // New orders start with open status
-      });
-
-      console.log('Trade saved successfully:', response.data);
-
-    } catch (error) {
-      console.error('Error during trade creation:', error);
-      if (error.response) {
-        // The request was made and the server responded with a status code
-        // that falls out of the range of 2xx
-        console.error('Error response:', error.response.data);
-      } else if (error.request) {
-        // The request was made but no response was received
-        console.error('No response received:', error.request);
-      } else {
-        // Something happened in setting up the request that triggered an Error
-        console.error('Error message:', error.message);
+      const { data } = await axios.get('/api/orders?scope=open');
+      const bids = [];
+      const asks = [];
+      for (const o of data.orders ?? []) {
+        if (!o.limit_price) continue; // market/stop orders don't rest at a price
+        const remaining = parseFloat(o.quantity) - parseFloat(o.filled_quantity);
+        if (remaining <= 0) continue;
+        const entry = {
+          price: String(o.limit_price),
+          amount: String(remaining),
+          isVirtual: true,
+          orderId: o.id,
+        };
+        (o.side === 'buy' ? bids : asks).push(entry);
       }
-      // Consider adding error state or notifications here
-      // But don't revert the UI state as it would be confusing to users
+      setVirtualOrders({ bids, asks });
+    } catch (err) {
+      console.error('Error fetching open orders:', err);
     }
-
   }, [user]);
 
-  // Remove a specific virtual order
-  const removeVirtualOrder = useCallback((side, price) => {
-    setVirtualOrders(prev => {
-      const sideKey = side.toLowerCase();
-      if (sideKey !== 'bids' && sideKey !== 'asks') {
-        console.error("Side must be 'bids' or 'asks'");
-        return prev;
-      }
+  // Refresh on login and every few seconds; anything that places or cancels
+  // can also call refreshOrders() for an immediate update.
+  useEffect(() => {
+    refreshOrders();
+    const interval = setInterval(refreshOrders, 3000);
+    return () => clearInterval(interval);
+  }, [refreshOrders]);
 
-      const newOrders = prev[sideKey].filter(
-        order => parseFloat(order.price) !== parseFloat(price)
-      );
-
-      return {
-        ...prev,
-        [sideKey]: newOrders
-      };
-    });
-  }, []);
-
-  // Clear all virtual orders
-  const clearVirtualOrders = useCallback(() => {
-    setVirtualOrders({
-      bids: [],
-      asks: []
-    });
-  }, []);
-
-// Fetch user trades and add them to virtual orders
-const fetchUserTrades = useCallback(async () => {
-  if (!user?.userId) return;
-  
-  try {
-    setIsLoadingTrades(true);
-    
-    // First clear existing virtual orders to avoid duplicates
-    clearVirtualOrders();
-    
-    // Using POST method with Axios
-    const response = await axios.post('/api/trades/fetchTrades', {
-      user_id: user.userId
-    });
-    
-    // Check if we have trades
-    const trades = response.data.trades || [];
-    console.log('Fetched trades:', trades);
-    // Process trades and add them to virtual orders
-    trades.forEach(trade => {
-      // Only add active trades that aren't fully filled
-      if (trade.status === 'open' || trade.status === 'partially_filled') {
-        const remainingAmount = parseFloat(trade.amount) - parseFloat(trade.filled_amount);
-        
-        if (remainingAmount > 0) {
-          // For "bid" trades, add to bids; for "ask" trades, add to asks
-          const side = trade.trade_type === 'bid' ? 'bids' : 'asks';
-          
-          // Add to virtual order but don't save to database again
-          setVirtualOrders(prev => {
-            // Create new virtual order
-            const newOrder = {
-              price: trade.price.toString(),
-              amount: remainingAmount.toString(),
-              isVirtual: true,
-              tradeId: trade.id // Store the trade ID for reference
-            };
-            
-            return {
-              ...prev,
-              [side]: [...prev[side], newOrder]
-            };
-          });
-        }
-      }
-    });
-    
-    console.log('User trades added to virtual orderbook');
-  } catch (err) {
-    console.error('Error fetching user trades:', err);
-    if (err.response) {
-      console.error('Error response:', err.response.data);
-    }
-    setError('Failed to load user trades');
-  } finally {
-    setIsLoadingTrades(false);
-  }
-}, [user, clearVirtualOrders]);
-
-  // Connect to WebSocket. The hook handles dropped connections and retries on
-  // its own, so a wifi blip or VPN switch no longer leaves the book frozen.
+  // Live market depth stream (display only).
   const streamUrl = symbol
     ? (backtestActive
         ? 'ws://20.193.153.208:8080'
@@ -258,8 +102,6 @@ const fetchUserTrades = useCallback(async () => {
     setError(null);
 
     if (backtestActive && backtestConfig) {
-      // Send config to the backtest stream. Re-sent on every reconnect, since
-      // the backtest server needs it before it will replay anything.
       console.log('Sending backtest configuration:', backtestConfig);
       socket.send(JSON.stringify({
         startDate: backtestConfig.startDateTime,
@@ -272,26 +114,15 @@ const fetchUserTrades = useCallback(async () => {
   const handleStreamMessage = useCallback((event) => {
     try {
       const data = JSON.parse(event.data);
-      if (backtestActive) console.log("Backtest data: ", data);
-      // Process the orderbook data
+      if (backtestActive) console.log('Backtest data: ', data);
       if (!data.bids || !data.asks) {
         console.warn('Skipping message: missing bids or asks');
         return;
       }
-      const processedBids = data.bids.map(([price, amount]) => ({
-        price,
-        amount
-      }));
-
-      const processedAsks = data.asks.map(([price, amount]) => ({
-        price,
-        amount
-      }));
-
       setOrderbook({
-        bids: processedBids,
-        asks: processedAsks,
-        lastUpdateId: data.lastUpdateId
+        bids: data.bids.map(([price, amount]) => ({ price, amount })),
+        asks: data.asks.map(([price, amount]) => ({ price, amount })),
+        lastUpdateId: data.lastUpdateId,
       });
     } catch (err) {
       console.error('Error processing WebSocket message:', err);
@@ -312,23 +143,8 @@ const fetchUserTrades = useCallback(async () => {
     }
   }, [connectionStatus]);
 
+  const getCompleteOrderbook = useCallback(() => mergeOrderbooks(), [mergeOrderbooks]);
 
-
-  // Fetch user trades when component mounts or user changes
-  useEffect(() => {
-    fetchUserTrades();
-  }, [fetchUserTrades, user]);
-
-  // Get the complete orderbook with virtual orders
-  const getCompleteOrderbook = useCallback(() => {
-    return mergeOrderbooks();
-  }, [mergeOrderbooks]);
-
-  // useEffect(() => {
-  //   console.log('Orderbook updated:', orderbook);
-  // }, [orderbook]);
-
-  // Context value
   const value = {
     rawOrderbook: orderbook,
     virtualOrders,
@@ -336,11 +152,7 @@ const fetchUserTrades = useCallback(async () => {
     connected,
     connectionStatus,
     error,
-    isLoadingTrades,
-    addVirtualOrder,
-    removeVirtualOrder,
-    clearVirtualOrders,
-    fetchUserTrades  // Expose the fetch function in case you need to refresh manually
+    refreshOrders,
   };
 
   return (

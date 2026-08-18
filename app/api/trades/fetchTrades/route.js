@@ -1,48 +1,30 @@
+// Compatibility shim: the history page still asks for "trades", which are now
+// engine orders. Field names are mapped back to the legacy shape.
 import { NextResponse } from "next/server";
 import { runQuery } from "@/lib/db-utils";
 
 export async function POST(req) {
     try {
-        // Parse the request body
-        const body = await req.json();
-        const userId = body.user_id;
-        
-        if (!userId) {
-            return NextResponse.json(
-                { message: "Missing required parameter: user_id" },
-                { status: 400 }
-            );
+        const { user_id } = await req.json();
+        if (!user_id) {
+            return NextResponse.json({ error: "User ID is required" }, { status: 400 });
         }
-        
-        // Query the database for trades
-        const query = 'SELECT * FROM user_trades WHERE user_id = $1;';
-        const allTrades = await runQuery(query, [userId]);
-        
-        // Check if trades were found (allTrades will be an array, even if empty)
-        if (!allTrades || allTrades.length === 0) {
-            return NextResponse.json(
-                { 
-                    message: "No trades found for this user",
-                    trades: [] 
-                },
-                { status: 200 }  // Using 200 instead of 404 since empty results are valid
-            );
-        }
-        
-        // Return the trades
-        return NextResponse.json(
-            { 
-                message: "Trades fetched successfully", 
-                trades: allTrades 
-            },
-            { status: 200 }
+        const trades = await runQuery(
+            `SELECT id,
+                    CASE side WHEN 'buy' THEN 'bid' ELSE 'ask' END AS trade_type,
+                    type AS order_type,
+                    COALESCE(limit_price, avg_fill_price, stop_price, 0) AS price,
+                    quantity AS amount,
+                    filled_quantity AS filled_amount,
+                    CASE status WHEN 'cancelled' THEN 'canceled' ELSE status END AS status,
+                    created_at
+             FROM orders WHERE user_id = $1
+             ORDER BY created_at DESC LIMIT 200`,
+            [user_id]
         );
-    }
-    catch (err) {
-        console.error('Error in fetching trades:', err);
-        return NextResponse.json(
-            { message: "Internal server error", error: err.message },
-            { status: 500 }
-        );
+        return NextResponse.json({ trades }, { status: 200 });
+    } catch (error) {
+        console.error("Error fetching trades:", error);
+        return NextResponse.json({ error: "Internal server error" }, { status: 500 });
     }
 }

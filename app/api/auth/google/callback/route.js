@@ -71,18 +71,22 @@ export async function GET(request) {
       const userId = (await addUsertoDb(dbUserInfo)) ?? (await getUserId(userInfo.email));
       console.log('User added/updated in database:', userId);
       
-      // Initialize default funds only if the user doesn't already have an entry.
-      // user_portfolios holds one row per snapshot rather than one per user, so
-      // this guards on "has no snapshots yet" instead of a unique constraint.
+      // Open a balance account with the starter cash for first-time sign-ins.
+      // The ON CONFLICT guard makes repeat logins a no-op; the ledger entry is
+      // only written when the account was actually created.
       if (userId) {
-        const defaultFundQuery = `
-          INSERT INTO user_portfolios (user_id, total_balance, total_invested, available_funds, last_updated, btccoins)
-          SELECT $1, 10000, 0, 10000, NOW(), 0
-          WHERE NOT EXISTS (SELECT 1 FROM user_portfolios WHERE user_id = $1);
-        `;
-
-        await runQuery(defaultFundQuery, [userId]);
-        console.log('Default funds initialization attempted for user:', userId);
+        const created = await runQuery(
+          `INSERT INTO balances (user_id, cash_available) VALUES ($1, 10000)
+           ON CONFLICT (user_id) DO NOTHING RETURNING user_id;`,
+          [userId]
+        );
+        if (created.length > 0) {
+          await runQuery(
+            `INSERT INTO ledger_entries (user_id, account, delta, ref_type)
+             VALUES ($1, 'cash_available', 10000, 'signup');`,
+            [userId]
+          );
+        }
       }
     } catch (dbError) {
       console.error('Database error:', dbError);

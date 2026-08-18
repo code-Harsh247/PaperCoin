@@ -1,22 +1,23 @@
 import { NextResponse } from "next/server";
-import { runQuery} from '@/lib/db-utils';
+import { runQuery } from '@/lib/db-utils';
 
+// Spendable balances for the trading form. Reserved amounts are intentionally
+// excluded: money committed to a resting order is not available to spend.
 export async function POST(req) {
-    try{
-        let body = await req.json();
-        const { user_id } = body;
-        const query = `SELECT available_funds, btccoins FROM user_portfolios WHERE user_id = $1`;
-        const params = [user_id];
-        const funds = await runQuery(query, params);
-        // console.log("Funds fetched successfully: ", funds);
-        if (funds.rowCount === 0) {
-            return NextResponse.json({ message: 'No funds found' }, { status: 404 });
+    try {
+        const { user_id } = await req.json();
+        if (!user_id) {
+            return NextResponse.json({ error: "User ID is required" }, { status: 400 });
         }
-        return NextResponse.json({ funds }, { status: 200 });
-
-    }
-    catch (error) {
-        console.error("Error fetching funds: ", error);
-        return NextResponse.json({ message: 'Error fetching funds' }, { status: 500 });
+        const rows = await runQuery(
+            `SELECT cash_available AS available_funds, btc_available AS btccoins,
+                    cash_reserved, btc_reserved
+             FROM balances WHERE user_id = $1`,
+            [user_id]
+        );
+        return NextResponse.json({ funds: rows }, { status: 200 });
+    } catch (error) {
+        console.error("Error fetching funds:", error);
+        return NextResponse.json({ error: "Internal server error" }, { status: 500 });
     }
 }

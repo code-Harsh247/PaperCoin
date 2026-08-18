@@ -48,13 +48,18 @@ export async function POST(request) {
             return NextResponse.json({ message: "Failed to create user account." }, { status: 500 });
         }
 
-        // Initialize default funds for new user
-        const defaultFundQuery = `
-            INSERT INTO user_portfolios (user_id, total_balance, total_invested, available_funds, last_updated, btccoins)
-            VALUES ($1, 10000, 0, 10000, NOW(), 0);
-        `;
-        
-        await runQuery(defaultFundQuery, [user_id]);
+        // Open a balance account with the starter cash, recorded through the
+        // ledger so even the opening position is explainable.
+        await runQuery(
+            `INSERT INTO balances (user_id, cash_available) VALUES ($1, 10000)
+             ON CONFLICT (user_id) DO NOTHING;`,
+            [user_id]
+        );
+        await runQuery(
+            `INSERT INTO ledger_entries (user_id, account, delta, ref_type)
+             VALUES ($1, 'cash_available', 10000, 'signup');`,
+            [user_id]
+        );
         return NextResponse.json({ message: "User added successfully with default portfolio." }, { status: 200 });
 
     } catch (error) {

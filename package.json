@@ -6,7 +6,10 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "engine": "node engine/index.mjs",
+    "engine:migrate": "node engine/migrate.mjs",
+    "engine:test": "node --test engine/test/*.test.mjs"
   },
   "dependencies": {
     "@amcharts/amcharts5": "^5.12.0",

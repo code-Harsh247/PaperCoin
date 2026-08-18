@@ -6,58 +6,62 @@ import axios from "axios";
 import { useAuthStore } from "@/store/useAuthStore";
 import { toast } from "react-hot-toast"; // Import the toast function
 
+const API_TYPE = { Limit: "limit", Market: "market", "Stop Limit": "stop_limit" };
+
 export default function TradingForm() {
-  const { orderbook, addVirtualOrder, rawOrderbook, connected, connectionStatus } = useOrderbook();
-  const [balance, setBalance] = useState({ USDT: 0, BTC: 0 });
+  const { rawOrderbook, connected, connectionStatus, refreshOrders } = useOrderbook();
+  const [balance, setBalance] = useState({ USDT: 0, BTC: 0, reservedUSDT: 0, reservedBTC: 0 });
   const { user } = useAuthStore();
-  
-  useEffect(() => {
-    const fetchFunds = async () => {
-      if (!user || !user.userId) {
-        console.log("User not available yet, skipping funds fetch");
-        return;
-      }
-      
-      try {
-        const response = await axios.post("/api/getFunds", { user_id: user.userId });
-        if (response.status === 200) {
-          console.log("Funds fetched successfully in trading: ", response.data.funds);
-          
-          const fundsData = response.data.funds;
-          
-          if (Array.isArray(fundsData) && fundsData.length > 0) {
-            const userFunds = fundsData[0];
-            setBalance({
-              USDT: parseFloat(userFunds.available_funds) || 0,
-              BTC: parseFloat(userFunds.btccoins) || 0
-            });
-          } else if (typeof fundsData === 'object' && fundsData !== null) {
-            setBalance({
-              USDT: parseFloat(fundsData.available_funds) || 0,
-              BTC: parseFloat(fundsData.btccoins) || 0
-            });
-          }
-        }
-      } catch (error) {
-        console.error("Error fetching funds:", error);
-      }
-    };
-    
-    fetchFunds();
+
+  // Spendable balances come from the engine's ledger. Refreshed on an interval
+  // because fills happen server-side whether or not this tab does anything.
+  const fetchBalances = useCallback(async () => {
+    if (!user?.userId) return;
+    try {
+      const { data } = await axios.get("/api/balances");
+      setBalance({
+        USDT: parseFloat(data.cash_available) || 0,
+        BTC: parseFloat(data.btc_available) || 0,
+        reservedUSDT: parseFloat(data.cash_reserved) || 0,
+        reservedBTC: parseFloat(data.btc_reserved) || 0,
+      });
+    } catch (error) {
+      console.error("Error fetching balances:", error);
+    }
   }, [user]);
 
   useEffect(() => {
-    console.log("Balance updated:", balance);
-  }, [balance]);
+    fetchBalances();
+    const interval = setInterval(fetchBalances, 3000);
+    return () => clearInterval(interval);
+  }, [fetchBalances]);
 
   const [orderType, setOrderType] = useState("Limit");
   const [buyPrice, setBuyPrice] = useState("");
   const [sellPrice, setSellPrice] = useState("");
+  const [buyStopPrice, setBuyStopPrice] = useState("");
+  const [sellStopPrice, setSellStopPrice] = useState("");
   const [buyAmount, setBuyAmount] = useState("1");
   const [sellAmount, setSellAmount] = useState("1");
   const [buyError, setBuyError] = useState("");
   const [sellError, setSellError] = useState("");
   const [marketPrice, setMarketPrice] = useState(null);
+
+  // One placement path for both sides: submit to the engine, then refresh the
+  // book overlay and balances so the reservation shows up immediately.
+  const placeOrder = async (side, { price, stopPrice, amount }) => {
+    const payload = {
+      side,
+      type: API_TYPE[orderType],
+      quantity: String(amount),
+    };
+    if (orderType !== "Market") payload.limit_price = String(price);
+    if (orderType === "Stop Limit") payload.stop_price = String(stopPrice);
+    const { data } = await axios.post("/api/orders", payload);
+    refreshOrders();
+    fetchBalances();
+    return data;
+  };
 
   const formatPrice = (price) => {
     return parseFloat(price).toFixed(2);
@@ -96,7 +100,9 @@ export default function TradingForm() {
       if (orderType !== "Market" && parseInput(buyPrice) <= 0) {
         throw new Error("Please enter a valid price");
       }
-
+      if (orderType === "Stop Limit" && parseInput(buyStopPrice) <= 0) {
+        throw new Error("Please enter a valid stop price");
+      }
       if (parseInput(buyAmount) <= 0) {
         throw new Error("Please enter a valid amount");
       }
@@ -104,18 +110,24 @@ export default function TradingForm() {
       const finalPrice = orderType === "Market" ? marketPrice : parseInput(buyPrice);
       const cost = finalPrice * parseInput(buyAmount);
 
+      // Immediate feedback only — the engine is the authority and will reject
+      // on its own check if a concurrent order got there first.
       if (cost > balance.USDT) {
         throw new Error(
           `Insufficient USDT balance (${balance.USDT.toFixed(2)} USDT available)`
         );
       }
 
-      addVirtualOrder("bids", finalPrice, parseInput(buyAmount));
-      console.log("Buy order placed:", { price: finalPrice, amount: parseInput(buyAmount) });
-      
-      // Display success toast notification
+      await placeOrder("buy", {
+        price: parseInput(buyPrice),
+        stopPrice: parseInput(buyStopPrice),
+        amount: parseInput(buyAmount),
+      });
+
       toast.success(
-        `Buy order placed: ${parseInput(buyAmount)} BTC at ${formatPrice(finalPrice)} USDT`,
+        orderType === "Market"
+          ? `Market buy submitted: ${parseInput(buyAmount)} BTC`
+          : `Buy order placed: ${parseInput(buyAmount)} BTC at ${formatPrice(finalPrice)} USDT`,
         {
           duration: 4000,
           position: "top-right",
@@ -127,13 +139,12 @@ export default function TradingForm() {
           icon: '🔄',
         }
       );
-      
+
       setBuyAmount("1");
     } catch (error) {
-      setBuyError(error.message);
-      
-      // Display error toast notification
-      toast.error(error.message, {
+      const message = error.response?.data?.error || error.message;
+      setBuyError(message);
+      toast.error(message, {
         duration: 4000,
         position: "top-right",
         style: {
@@ -153,11 +164,12 @@ export default function TradingForm() {
       if (orderType !== "Market" && parseInput(sellPrice) <= 0) {
         throw new Error("Please enter a valid price");
       }
-
+      if (orderType === "Stop Limit" && parseInput(sellStopPrice) <= 0) {
+        throw new Error("Please enter a valid stop price");
+      }
       if (parseInput(sellAmount) <= 0) {
         throw new Error("Please enter a valid amount");
       }
-
       if (parseInput(sellAmount) > balance.BTC) {
         throw new Error(
           `Insufficient BTC balance (${balance.BTC.toFixed(8)} BTC available)`
@@ -166,12 +178,16 @@ export default function TradingForm() {
 
       const finalPrice = orderType === "Market" ? marketPrice : parseInput(sellPrice);
 
-      addVirtualOrder("asks", finalPrice, parseInput(sellAmount));
-      console.log("Sell order placed:", { price: finalPrice, amount: parseInput(sellAmount) });
-      
-      // Display success toast notification
+      await placeOrder("sell", {
+        price: parseInput(sellPrice),
+        stopPrice: parseInput(sellStopPrice),
+        amount: parseInput(sellAmount),
+      });
+
       toast.success(
-        `Sell order placed: ${parseInput(sellAmount)} BTC at ${formatPrice(finalPrice)} USDT`,
+        orderType === "Market"
+          ? `Market sell submitted: ${parseInput(sellAmount)} BTC`
+          : `Sell order placed: ${parseInput(sellAmount)} BTC at ${formatPrice(finalPrice)} USDT`,
         {
           duration: 4000,
           position: "top-right",
@@ -186,10 +202,9 @@ export default function TradingForm() {
 
       setSellAmount("1");
     } catch (error) {
-      setSellError(error.message);
-      
-      // Display error toast notification
-      toast.error(error.message, {
+      const message = error.response?.data?.error || error.message;
+      setSellError(message);
+      toast.error(message, {
         duration: 4000,
         position: "top-right",
         style: {
@@ -206,7 +221,7 @@ export default function TradingForm() {
       {/* Order Type Buttons */}
       <div className="flex space-x-3 mb-4 items-center justify-between">
         <div>
-          {["Limit", "Market"].map((type) => (
+          {["Limit", "Market", "Stop Limit"].map((type) => (
             <button
               key={type}
               className={`px-3 py-1.5 rounded-lg text-sm ${orderType === type
@@ -245,6 +260,26 @@ export default function TradingForm() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* BUY SIDE */}
         <div className="bg-[#111722] p-3 rounded-lg border border-gray-800 shadow-lg">
+          {/* Stop Price Input (stop-limit only) */}
+          {orderType === "Stop Limit" && (
+            <div className="mb-3">
+              <div className="bg-gray-800 border border-gray-700 rounded-lg relative">
+                <div className="absolute top-1 left-2 text-gray-400 text-xs">
+                  Stop Price (triggers at or above)
+                </div>
+                <input
+                  type="text"
+                  value={buyStopPrice}
+                  onChange={(e) => {
+                    if (validateNumberInput(e.target.value)) setBuyStopPrice(e.target.value);
+                  }}
+                  className="w-full bg-transparent pt-6 pb-1.5 px-2 focus:outline-none text-right text-sm text-white"
+                />
+                <div className="absolute top-1 right-2 text-gray-400 text-xs">USDT</div>
+              </div>
+            </div>
+          )}
+
           {/* Price Input */}
           <div className="mb-3">
             <div className="bg-gray-800 border border-gray-700 rounded-lg relative">
@@ -328,6 +363,26 @@ export default function TradingForm() {
 
         {/* SELL SIDE */}
         <div className="bg-[#111722] p-3 rounded-lg border border-gray-800 shadow-lg">
+          {/* Stop Price Input (stop-limit only) */}
+          {orderType === "Stop Limit" && (
+            <div className="mb-3">
+              <div className="bg-gray-800 border border-gray-700 rounded-lg relative">
+                <div className="absolute top-1 left-2 text-gray-400 text-xs">
+                  Stop Price (triggers at or below)
+                </div>
+                <input
+                  type="text"
+                  value={sellStopPrice}
+                  onChange={(e) => {
+                    if (validateNumberInput(e.target.value)) setSellStopPrice(e.target.value);
+                  }}
+                  className="w-full bg-transparent pt-6 pb-1.5 px-2 focus:outline-none text-right text-sm text-white"
+                />
+                <div className="absolute top-1 right-2 text-gray-400 text-xs">USDT</div>
+              </div>
+            </div>
+          )}
+
           {/* Price Input */}
           <div className="mb-3">
             <div className="bg-gray-800 border border-gray-700 rounded-lg relative">

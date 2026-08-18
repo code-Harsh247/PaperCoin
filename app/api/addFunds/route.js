@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { runQuery, getUserId } from '@/lib/db-utils';
 
+// Deposits are a ledger event like everything else: append the entry, project
+// it onto the balance, one transaction. Deposits touch only cash_available, so
+// they cannot collide with the engine's reservation accounting.
 export async function POST(req) {
     try {
         const { email, reqFunds } = await req.json();
@@ -15,34 +18,24 @@ export async function POST(req) {
             return NextResponse.json({ message: 'User not found' }, { status: 404 });
         }
 
-        // user_portfolios is a log of snapshots, so adding funds means appending
-        // a new row derived from the most recent one. Updating in place would
-        // rewrite every historical snapshot for this user.
-        const query = `
-            INSERT INTO user_portfolios
-                (user_id, total_balance, total_invested, available_funds, btccoins, last_updated)
-            SELECT user_id,
-                   total_balance + $1,
-                   total_invested,
-                   available_funds + $1,
-                   btccoins,
-                   NOW()
-            FROM user_portfolios
-            WHERE user_id = $2
-            ORDER BY last_updated DESC
-            LIMIT 1
-            RETURNING total_balance, available_funds;
-        `;
-
-        const rows = await runQuery(query, [amount, userId]);
+        const rows = await runQuery(
+            `WITH entry AS (
+                INSERT INTO ledger_entries (user_id, account, delta, ref_type)
+                VALUES ($1, 'cash_available', $2, 'deposit')
+             )
+             UPDATE balances
+             SET cash_available = cash_available + $2, updated_at = NOW()
+             WHERE user_id = $1
+             RETURNING cash_available;`,
+            [userId, String(amount)]
+        );
         if (rows.length === 0) {
-            return NextResponse.json({ message: 'Portfolio not found' }, { status: 404 });
+            return NextResponse.json({ message: 'No balance account for user' }, { status: 404 });
         }
 
         return NextResponse.json({
             message: 'Funds added successfully',
-            total_balance: rows[0].total_balance,
-            available_funds: rows[0].available_funds
+            available_funds: rows[0].cash_available,
         }, { status: 200 });
     }
     catch (error) {

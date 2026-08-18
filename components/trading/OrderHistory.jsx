@@ -1,7 +1,6 @@
 'use client';
 import React, { useEffect, useState, useRef } from "react";
 import { useAuthStore } from "@/store/useAuthStore";
-import { useMatchingEngine } from "@/Context/MatchingEngineContext"; // adjust path if needed
 import axios from "axios";
 
 const OrderHistory = () => {
@@ -10,7 +9,18 @@ const OrderHistory = () => {
   const [error, setError] = useState(null);
   const [cancellingIds, setCancellingIds] = useState(new Set());
   const { user } = useAuthStore();
-  const { cancelTrade } = useMatchingEngine();
+
+  // Cancellation goes to the engine; the API raises the flag, the engine
+  // releases the reservation and confirms. The next poll reflects it.
+  const cancelTrade = async (orderId) => {
+    try {
+      await axios.post("/api/orders/cancel", { order_id: orderId });
+      return true;
+    } catch (err) {
+      console.error("[OrderHistory] Cancel failed:", err.response?.data || err.message);
+      return false;
+    }
+  };
 
   // Keep a ref to the latest trades for comparison inside the polling callback
   const tradesRef = useRef(trades);

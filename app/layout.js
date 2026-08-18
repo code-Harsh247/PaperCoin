@@ -3,7 +3,8 @@ import './globals.css';
 import NavbarLayout from '@/components/NavbarLayout'; 
 import { OrderbookProvider } from '@/Context/OrderBookContext';
 import { BacktestProvider } from '@/Context/BacktestContext';
-import { MatchingEngineProvider } from '@/Context/MatchingEngineContext';
+// Matching moved server-side: the engine process owns fills now, so the old
+// client-side MatchingEngineProvider is gone from the tree.
 
 // Properly declare metadata export outside the component function
 export const metadata = {
@@ -15,12 +16,10 @@ export default function RootLayout({ children }) {
   return (
     <html lang="en">
       <body>
-      <BacktestProvider> 
+      <BacktestProvider>
       <OrderbookProvider symbol="btcusdt">
-        <MatchingEngineProvider>
         <NavbarLayout /> {/* Render NavbarLayout here */}
         {children}
-        </MatchingEngineProvider>
       </OrderbookProvider>
       </BacktestProvider>
       </body>
