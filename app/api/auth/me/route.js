@@ -5,7 +5,7 @@ import { jwtVerify } from 'jose';
 import { getUserId } from '@/lib/db-utils';
 
 export async function GET() {
-  const token = cookies().get('token')?.value;
+  const token = (await cookies()).get('token')?.value;
   
   if (!token) {
     return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });

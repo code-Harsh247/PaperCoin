@@ -13,24 +13,20 @@ export async function POST(req) {
     
     // Prepare and execute the database query
     try {
-      const query = `INSERT INTO user_trades (user_id, trade_type, price, amount, filled_amount, status) 
-               VALUES ($1, $2, $3, $4, $5, $6)`;
+      // Placing an order only records it. The portfolio is settled when the
+      // order actually fills, in updateUserPortfolio() in MatchingEngineContext,
+      // which is the one place that knows the filled amount. Deducting here as
+      // well would charge the user twice for the same trade.
+      const query = `INSERT INTO user_trades (user_id, trade_type, price, amount, filled_amount, status)
+               VALUES ($1, $2, $3, $4, $5, $6)
+               RETURNING id`;
       const values = [user_id, normalizedTradeType, price, amount, filled_amount, normalizedStatus];
       const result = await runQuery(query, values);
       console.log("Trade created successfully in the DB:", result);
-      const fundQuery = "UPDATE user_portfolios SET available_funds = available_funds - $1 WHERE user_id = $2";
-        const totalQuery = "UPDATE user_portfolios SET total_balance = total_balance - $1 WHERE user_id = $2";
-        
-        const fundParams = [price, user_id];
-        const totalParams = [price, user_id];
-        
-        await runQuery(fundQuery, fundParams);
-        await runQuery(totalQuery, totalParams);
 
-      
-      return NextResponse.json({ 
-        message: "Trade created successfully", 
-        trade_id: result.insertId,
+      return NextResponse.json({
+        message: "Trade created successfully",
+        trade_id: result[0]?.id,
         timestamp: new Date().toISOString()
       });
     } catch (dbError) {

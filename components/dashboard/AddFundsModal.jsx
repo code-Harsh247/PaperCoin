@@ -73,7 +73,7 @@ const AddFundsModal = ({ isOpen, onClose, onSuccess }) => {
     
     try {
       // Call the add funds API
-      const response = await axios.post('/api/addFunds  ', {
+      const response = await axios.post('/api/addFunds', {
         email: userEmail,
         reqFunds: reqFunds
       })

@@ -6,7 +6,7 @@ import jwt from "jsonwebtoken";
 export async function GET() {
   try {
     // Get the auth token from cookies
-    const cookieStore = cookies();
+    const cookieStore = await cookies();
     const token = cookieStore.get('token')?.value;
 
     // If no token exists, user is not authenticated
@@ -35,7 +35,7 @@ export async function GET() {
     console.error("Token verification error:", error);
     
     // Clear the invalid token
-    const cookieStore = cookies();
+    const cookieStore = await cookies();
     cookieStore.delete('token');
     
     return NextResponse.json({

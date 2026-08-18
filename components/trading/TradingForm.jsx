@@ -7,7 +7,7 @@ import { useAuthStore } from "@/store/useAuthStore";
 import { toast } from "react-hot-toast"; // Import the toast function
 
 export default function TradingForm() {
-  const { orderbook, addVirtualOrder, rawOrderbook, connected } = useOrderbook();
+  const { orderbook, addVirtualOrder, rawOrderbook, connected, connectionStatus } = useOrderbook();
   const [balance, setBalance] = useState({ USDT: 0, BTC: 0 });
   const { user } = useAuthStore();
   
@@ -222,10 +222,22 @@ export default function TradingForm() {
         {/* Connection Status */}
         <div className="mb-3 w-64 flex items-center justify-end">
           <div
-            className={`w-3 h-3 rounded-full mr-2 ${connected ? 'bg-green-500' : 'bg-red-500'}`}
+            className={`w-3 h-3 rounded-full mr-2 ${
+              connected
+                ? 'bg-green-500'
+                : connectionStatus === 'closed'
+                  ? 'bg-red-500'
+                  : 'bg-amber-500 animate-pulse'
+            }`}
           ></div>
           <span className="text-xs text-gray-400">
-            {connected ? 'Connected to Orderbook' : 'Disconnected from Orderbook'}
+            {connected
+              ? 'Connected to Orderbook'
+              : connectionStatus === 'reconnecting'
+                ? 'Reconnecting to Orderbook...'
+                : connectionStatus === 'connecting'
+                  ? 'Connecting to Orderbook...'
+                  : 'Disconnected from Orderbook'}
           </span>
         </div>
       </div>

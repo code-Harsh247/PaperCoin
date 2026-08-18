@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React from "react";
 import {
   ArrowUp,
   ArrowDown,
@@ -8,6 +8,7 @@ import {
   TrendingUp,
   RefreshCw,
 } from "lucide-react";
+import useBtcPrice from "@/lib/useBtcPrice";
 
 // Balance Card Component
 export const BalanceCard = ({
@@ -20,56 +21,24 @@ export const BalanceCard = ({
   onCtaClick = () => {},
   showAddFunds = false,
   showBitcoinCount = false,
-  bitcoinCount = "0",
 }) => {
   const Icon = icon;
   const isPositive = changePercentage >= 0;
 
-  // States for WebSocket data
-  const [btcPrice, setBtcPrice] = useState(0);
-  const [connected, setConnected] = useState(false);
-  const [error, setError] = useState(null);
+  // Live BTC price, shared with the rest of the dashboard so every card quotes
+  // the same number and survives a dropped connection.
+  const { price: btcPrice, connected } = useBtcPrice();
 
-  useEffect(() => {
-    if (!showBitcoinCount) return;
-
-    // Connect to Binance WebSocket for BTC/USDT ticker
-    const ws = new WebSocket("wss://stream.binance.com:9443/ws/btcusdt@ticker");
-
-    ws.onopen = () => {
-      setConnected(true);
-      setError(null);
-    };
-
-    ws.onmessage = (event) => {
-      try {
-        const tickerData = JSON.parse(event.data);
-        // Store the current price for Bitcoin
-        setBtcPrice(parseFloat(tickerData.c));
-      } catch (err) {
-        setError("Error processing data");
-        console.error("Processing error:", err);
-      }
-    };
-
-    ws.onclose = () => {
-      setConnected(false);
-    };
-
-    // Clean up the WebSocket connection when the component unmounts
-    return () => {
-      ws.close();
-    };
-  }, [showBitcoinCount]);
-
-  // Calculate USD equivalent of Bitcoin
-  const usdEquivalent =
-    showBitcoinCount && btcPrice > 0
-      ? (parseFloat(bitcoinCount) * btcPrice).toLocaleString(undefined, {
+  // The card's headline figure is already the holdings value, so quoting the
+  // same number again next to the coin count says nothing. Show the price those
+  // coins are being valued at instead.
+  const btcPriceLabel =
+    btcPrice > 0
+      ? `$${btcPrice.toLocaleString(undefined, {
           minimumFractionDigits: 2,
           maximumFractionDigits: 2,
-        })
-      : "0.00";
+        })}`
+      : null;
 
   return (
     <div className="relative bg-gradient-to-r from-gray-800 to-[#111722] rounded-xl shadow-lg overflow-hidden border border-gray-700">
@@ -96,14 +65,23 @@ export const BalanceCard = ({
                   <span className="text-green-500 text-xs">Live</span>
                 </span>
               )}
-              {showBitcoinCount && !connected && error && (
-                <span className="ml-2 flex items-center">
-                  <span className="w-2 h-2 rounded-full bg-red-500 mr-1"></span>
-                  <span className="text-red-500 text-xs">Offline</span>
+              {showBitcoinCount && !connected && (
+                <span className="ml-2 flex items-center" title="Price feed dropped. Retrying automatically.">
+                  <span className="w-2 h-2 rounded-full bg-amber-400 mr-1 animate-pulse"></span>
+                  <span className="text-amber-400 text-xs">Reconnecting</span>
                 </span>
               )}
             </div>
             <p className="text-3xl font-bold text-white mt-1">{amount}</p>
+
+            {showAddFunds && (
+              <button
+                onClick={onCtaClick}
+                className="mt-3 bg-amber-500 hover:bg-amber-600 text-black text-sm px-3 py-1 rounded-lg"
+              >
+                Add Funds
+              </button>
+            )}
 
             {showBitcoinCount && (
               <div className="mt-3 p-2 bg-gray-700 bg-opacity-40 rounded-lg">
@@ -112,16 +90,18 @@ export const BalanceCard = ({
                     <div className="w-6 h-6 bg-amber-500 rounded-full flex items-center justify-center mr-2">
                       <span className="text-xs font-bold">₿</span>
                     </div>
-                    <span className="text-white">{bitcoinCount} BTC</span>
+                    <span className="text-white">BTC</span>
                   </div>
-                  <span className="text-amber-500 px-2">≈ ${usdEquivalent}</span>
+                  <span className="text-amber-500 px-2">
+                    {btcPriceLabel ?? "price unavailable"}
+                  </span>
                 </div>
               </div>
             )}
           </div>
         </div>
 
-        <div className="relative min-h-[10px]">
+        <div className="min-h-[10px]">
           {changePercentage !== null && (
             <div className="flex items-center text-sm">
               {isPositive ? (
@@ -131,7 +111,7 @@ export const BalanceCard = ({
               )}
               <span className={isPositive ? "text-green-500" : "text-red-500"}>
                 {isPositive ? "+" : ""}
-                {changePercentage}%
+                {Number(changePercentage).toFixed(2)}%
               </span>
               {changeLabel && (
                 <span className="text-gray-400 ml-1">{changeLabel}</span>
@@ -139,15 +119,6 @@ export const BalanceCard = ({
             </div>
           )}
 
-          {/* Bottom right positioned button */}
-          {showAddFunds && (
-            <button
-              onClick={onCtaClick}
-              className="absolute bottom-0 right-0 bg-amber-500 hover:bg-amber-600 text-black text-sm px-3 py-1 rounded-lg"
-            >
-              Add Funds
-            </button>
-          )}
         </div>
       </div>
     </div>

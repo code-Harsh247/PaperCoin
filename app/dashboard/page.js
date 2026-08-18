@@ -1,5 +1,5 @@
 'use client';
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import axios from 'axios';
 import UserNameModal from '@/components/UserNameModal';
@@ -11,10 +11,8 @@ import { BalanceCard } from '@/components/DashboardCards';
 
 // Import the new components
 import PortfolioPerformance from '@/components/dashboard/PortfolioPerformance';
+import useBtcPrice from '@/lib/useBtcPrice';
 import TopAssets from '@/components/dashboard/TopAssets';
-import MarketOverview from '@/components/dashboard/MarketOverview';
-import RecentActivity from '@/components/dashboard/RecentActivity';
-import QuickActions from '@/components/dashboard/QuickActions';
 
 // Simple Toast Component
 const Toast = ({ message, type = 'success', onClose }) => {
@@ -82,6 +80,7 @@ const HighlightBanner = ({ amount, onClose }) => {
 
 export default function Dashboard() {
   const { user, loading, setUser, setLoading, signOut } = useAuthStore();
+  const { price: btcPrice } = useBtcPrice();
   const router = useRouter();
   const [isUserNameModalOpen, setIsUserNameModalOpen] = useState(false);
   const [isAddFundsModalOpen, setIsAddFundsModalOpen] = useState(false);
@@ -175,30 +174,29 @@ export default function Dashboard() {
     console.log("User: ", user);
   },[user]);
 
-  // Fetch Users portfolio data
-  useEffect(() => {
-    async function fetchDashboardData() {
-      try {
-        setIsDataLoading(true);
-        console.log(user)
-        const response = await axios.post('/api/weeklySnapshots',
-          {
-            user_id: user.userId
-          }
-        );
-        setDashboardData(response.data.dashboard);
-      } catch (err) {
-        console.error('Error fetching dashboard data:', err);
-        setError(err.response?.data?.error || 'Failed to fetch dashboard data');
-      } finally {
-        setIsDataLoading(false);
-      }
-    };
+  // Fetch Users portfolio data. Shared by the initial load and by anything that
+  // changes the balance, so both go through the same request.
+  const fetchDashboardData = useCallback(async () => {
+    if (!user?.userId) return;
 
-    if (user?.email) {
-      fetchDashboardData();
+    try {
+      setIsDataLoading(true);
+      const response = await axios.post('/api/weeklySnapshots', {
+        user_id: user.userId
+      });
+      setDashboardData(response.data.dashboard);
+      setError(null);
+    } catch (err) {
+      console.error('Error fetching dashboard data:', err);
+      setError(err.response?.data?.error || 'Failed to fetch dashboard data');
+    } finally {
+      setIsDataLoading(false);
     }
   }, [user]);
+
+  useEffect(() => {
+    fetchDashboardData();
+  }, [fetchDashboardData]);
 
   // Remove auto-hide for success banner
   // Previous auto-hide useEffect has been removed
@@ -209,6 +207,27 @@ export default function Dashboard() {
       currency: 'USD'
     }).format(value);
   };
+
+  // The stored balances are only rewritten when an order fills, so on their own
+  // they sit frozen while the market moves. Everything holdings-related is
+  // valued off the live price instead; only the cash figure comes from the
+  // database as-is.
+  const live = useMemo(() => {
+    if (!dashboardData) return null;
+
+    const cash = parseFloat(dashboardData.available_funds) || 0;
+    const btc = parseFloat(dashboardData.btc_coins) || 0;
+    const costBasis = parseFloat(dashboardData.total_invested) || 0;
+
+    // Until the first ticker message lands, fall back to cost basis so the card
+    // shows something sane rather than zero.
+    const holdingsValue = btcPrice > 0 ? btc * btcPrice : costBasis;
+
+    // Profit or loss on the position that has not been sold yet.
+    const unrealizedPct = costBasis > 0 ? ((holdingsValue - costBasis) / costBasis) * 100 : 0;
+
+    return { cash, btc, costBasis, holdingsValue, unrealizedPct };
+  }, [dashboardData, btcPrice]);
 
   const handleUserNameModalClose = (username) => {
     setIsUserNameModalOpen(false);
@@ -222,10 +241,8 @@ export default function Dashboard() {
 
   const handleAddFundsSuccess = (amount) => {
     // Refresh dashboard data after adding funds
-    if (user?.email) {
-      fetchDashboardData();
-    }
-    
+    fetchDashboardData();
+
     // Don't show the toast notification for fund additions
     // The following line has been removed:
     // showToast(`$${amount.toFixed(2)} added successfully to your account!`, 'success');
@@ -238,21 +255,6 @@ export default function Dashboard() {
   useEffect(() => {
     console.log("Dashboard Data: ", dashboardData);
   },[dashboardData]);
-
-  const fetchDashboardData = async () => {
-    try {
-      setIsDataLoading(true);
-      const response = await axios.post('/api/weeklySnapshots', {
-        email: user.email,
-      });
-      setDashboardData(response.data.dashboard);
-    } catch (err) {
-      console.error('Error fetching dashboard data:', err);
-      setError(err.response?.data?.error || 'Failed to fetch dashboard data');
-    } finally {
-      setIsDataLoading(false);
-    }
-  };
 
   if (loading) {
     return (
@@ -309,47 +311,33 @@ export default function Dashboard() {
 
             {/* Dashboard Summary Cards */}
             {isDataLoading ? (
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-                <div className="bg-gray-800 rounded-lg p-6 animate-pulse h-32"></div>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
                 <div className="bg-gray-800 rounded-lg p-6 animate-pulse h-32"></div>
                 <div className="bg-gray-800 rounded-lg p-6 animate-pulse h-32"></div>
               </div>
             ) : dashboardData ? (
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
                 <BalanceCard
-                  title="Total Balance"
-                  amount={formatCurrency(dashboardData.total_balance)}
-                  changePercentage={parseFloat(dashboardData.daily_balance_change_pct)}
-                
+                  title="Available Funds"
+                  amount={formatCurrency(live.cash)}
+                  changePercentage={null}
                   iconBg="bg-amber-500"
                   icon={Wallet}
-                  ctaText="View Details"
                   imgUrl="/Images/Balance.png"
-                  onCtaClick={() => console.log("View total balance details")}
+                  showAddFunds={true}
+                  onCtaClick={() => setIsAddFundsModalOpen(true)}
                 />
                 <BalanceCard
-                  title="Total Invested"
-                  amount={formatCurrency(dashboardData.total_invested)}
-                  changePercentage={parseFloat(dashboardData.daily_invested_change_pct)}
-                  
+                  title="Holdings Value"
+                  amount={formatCurrency(live.holdingsValue)}
+                  changePercentage={live.unrealizedPct}
+                  changeLabel={live.costBasis > 0 ? `vs ${formatCurrency(live.costBasis)} invested` : "nothing invested yet"}
                   iconBg="bg-blue-500"
                   icon={TrendingUp}
                   imgUrl="/Images/bitcoins.png"
                   ctaText="View Details"
                   showBitcoinCount={true}
-                  bitcoinCount={parseFloat(dashboardData.btc_coins)}
                   onCtaClick={() => console.log("View invested details")}
-                />
-                
-                <BalanceCard
-                  title="Available Funds"
-                  amount={formatCurrency(dashboardData.available_funds)}
-                  changePercentage={parseFloat(dashboardData.daily_available_change_pct)}
-                  
-                  iconBg="bg-purple-500"
-                  icon={Wallet}
-                  showAddFunds={true}
-                  onCtaClick={() => setIsAddFundsModalOpen(true)}
                 />
               </div>
             ) : (
@@ -358,29 +346,16 @@ export default function Dashboard() {
               </div>
             )}
 
-            {!isDataLoading && dashboardData && (
-              <>
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-                  {/* Portfolio Performance Chart Component */}
-                  <PortfolioPerformance />
-                  
-                  {/* Top Assets Component */}
-                  <TopAssets />
-                </div>
+            {/* These panels load their own data, so they are deliberately not
+                gated on the summary cards refreshing. Gating them meant the
+                chart tore down and refetched every time funds were added. */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+              {/* Portfolio Performance Chart Component */}
+              <PortfolioPerformance />
 
-                {/* Market Overview Component */}
-                <MarketOverview />
-
-                {/* Recent Activity & Quick Actions */}
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                  {/* Recent Activity Component */}
-                  <RecentActivity />
-                  
-                  {/* Quick Actions Component */}
-                  <QuickActions onAddFunds={() => setIsAddFundsModalOpen(true)} />
-                </div>
-              </>
-            )}
+              {/* Top Assets Component */}
+              <TopAssets />
+            </div>
           </div>
         </main>
       </div>

@@ -1,111 +1,96 @@
-CREATE TABLE weekly_portfolio_snapshots (
+-- PaperCoin schema reference.
+-- Matches what the app in this repo actually queries. Run against a fresh
+-- database to set one up:
+--   psql -U postgres -d papercoin -f tables.sql
+
+CREATE EXTENSION IF NOT EXISTS timescaledb;
+
+
+-- Accounts. Rows are created by lib/db-utils.js addUsertoDb(), used by both
+-- password signup (app/api/auth/signUp) and Google OAuth
+-- (app/api/auth/google/callback). password_hash is null for OAuth-only users
+-- and google_id is null for password-only users.
+CREATE TABLE IF NOT EXISTS users (
+    user_id SERIAL PRIMARY KEY,
+    username TEXT UNIQUE,
+    email TEXT NOT NULL UNIQUE,
+    password_hash TEXT,
+    google_id TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+
+-- Append-only portfolio snapshots, one row per change rather than one row per
+-- user: app/api/portfolios/update INSERTs a new row each time, and readers
+-- (portfolios/fetch, weeklySnapshots) take the latest by last_updated.
+-- Note app/api/addFunds UPDATEs by user_id, so it touches every row for a user.
+CREATE TABLE IF NOT EXISTS user_portfolios (
     id SERIAL PRIMARY KEY,
-    user_id INTEGER NOT NULL,
-    week_ending_date DATE NOT NULL,  -- Store the last day of each week
+    user_id INTEGER NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    total_balance DECIMAL(15, 2) NOT NULL DEFAULT 0,
+    total_invested DECIMAL(15, 2) NOT NULL DEFAULT 0,
+    available_funds DECIMAL(15, 2) NOT NULL DEFAULT 0,
+    btccoins DECIMAL(18, 8) NOT NULL DEFAULT 0,
+    last_updated TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_portfolios_user_updated
+    ON user_portfolios (user_id, last_updated DESC);
+
+
+-- Weekly rollups for the dashboard chart.
+CREATE TABLE IF NOT EXISTS weekly_portfolio_snapshots (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    week_ending_date DATE NOT NULL,   -- last day of the week
     total_balance DECIMAL(15,2) NOT NULL,
     total_invested DECIMAL(15,2) NOT NULL,
     available_funds DECIMAL(15,2) NOT NULL,
     weekly_balance_change_pct DECIMAL(6,2),
     weekly_invested_change_pct DECIMAL(6,2),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    
     UNIQUE (user_id, week_ending_date)
 );
 
-INSERT INTO weekly_portfolio_snapshots 
-(user_id, week_ending_date, total_balance, total_invested, available_funds, weekly_balance_change_pct, weekly_invested_change_pct)
-VALUES
--- Week 1: Starting position
-(49, '2025-02-02', 10000.00, 5000.00, 5000.00, NULL, NULL),
 
--- Week 2: Made some investments, market slightly up
-(49, '2025-02-09', 10250.00, 5500.00, 4750.00, 2.50, 10.00),
-
--- Week 3: Market continued rising
-(49, '2025-02-16', 10625.50, 5735.00, 4890.50, 3.66, 4.27),
-
--- Week 4: Small market correction
-(49, '2025-02-23', 10200.75, 5620.25, 4580.50, -4.00, -2.00),
-
--- Week 5: Recovery begins
-(49, '2025-03-02', 10452.75, 5900.50, 4552.25, 2.47, 4.99),
-
--- Week 6: Added funds and investments
-(49, '2025-03-09', 11780.40, 6250.75, 5529.65, 12.70, 5.94),
-
--- Week 7: Strong market performance
-(49, '2025-03-16', 12605.10, 6480.30, 6124.80, 7.00, 3.67),
-
--- Week 8: Took some profits
-(49, '2025-03-23', 12350.00, 5980.45, 6369.55, -2.02, -7.71),
-
--- Week 9: Sideways market
-(49, '2025-03-30', 12410.25, 6010.20, 6400.05, 0.49, 0.50),
-
--- Week 10: Current week (similar to your screenshot)
-(49, '2025-04-06', 10000.00, 5230.45, 4769.55, -19.42, -12.97);
-
--- Create the user_portfolios table
-CREATE TABLE user_portfolios (
-    user_id INTEGER PRIMARY KEY,
-    total_balance DECIMAL(15, 2) NOT NULL,
-    total_invested DECIMAL(15, 2) NOT NULL,
-    available_funds DECIMAL(15, 2) NOT NULL,
-    last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
--- Add sample data for user_id 49
-INSERT INTO user_portfolios (user_id, total_balance, total_invested, available_funds) 
-VALUES (49, 10000.00, 5230.45, 4769.55);
-
-
-CREATE TABLE user_trades (
+-- Orders. user_id is TEXT here because the trade routes pass the id through
+-- from the JWT without casting. status is lowercased by makeTrade:
+-- 'open', 'partially_filled', 'filled', 'canceled'.
+-- symbol has a default because makeTrade omits it from its INSERT.
+CREATE TABLE IF NOT EXISTS user_trades (
     id SERIAL PRIMARY KEY,
-    user_id TEXT NOT NULL,                -- User identifier
+    user_id TEXT NOT NULL,
     trade_type TEXT NOT NULL,             -- 'bid' or 'ask'
-    symbol TEXT NOT NULL,                 -- Trading pair e.g. 'BTCUSDT'
-    price DECIMAL(18,8) NOT NULL,         -- Order price
-    amount DECIMAL(18,8) NOT NULL,        -- Order amount
-    filled_amount DECIMAL(18,8) DEFAULT 0,-- Amount already filled
-    status TEXT NOT NULL,                 -- 'OPEN', 'FILLED', 'CANCELED', 'PARTIALLY_FILLED'
+    symbol TEXT NOT NULL DEFAULT 'BTCUSDT',
+    price DECIMAL(18,8) NOT NULL,
+    amount DECIMAL(18,8) NOT NULL,
+    filled_amount DECIMAL(18,8) DEFAULT 0,
+    status TEXT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Create a hypertable for time-series optimization
-SELECT create_hypertable('user_trades', 'created_at');
-
--- Index for frequent queries
-CREATE INDEX idx_user_trades_user_symbol_status ON user_trades(user_id, symbol, status);
+CREATE INDEX IF NOT EXISTS idx_user_trades_user_symbol_status
+    ON user_trades (user_id, symbol, status);
 
 
-CREATE TABLE orderbook_snapshots (
-  id BIGSERIAL,
-  timestamp TIMESTAMPTZ NOT NULL,
-  bids JSONB NOT NULL,
-  asks JSONB NOT NULL,
-  PRIMARY KEY (timestamp, id)
-);
+-- getOpenOrders() and getOrderHistory() in lib/db-utils.js read these two and
+-- order by trade_time, which is just created_at under another name.
+CREATE OR REPLACE VIEW openorders AS
+    SELECT *, created_at AS trade_time
+    FROM user_trades
+    WHERE status IN ('open', 'partially_filled');
 
--- Turn into hypertable
-SELECT create_hypertable('orderbook_snapshots', 'timestamp', chunk_time_interval => interval '1 day');
-
-CREATE INDEX ON orderbook_snapshots (timestamp DESC);
-
--- Enable compression
-ALTER TABLE orderbook_snapshots SET (
-  timescaledb.compress,
-  timescaledb.compress_orderby = 'timestamp DESC'
-);
-
--- Auto compress data older than 7 days
-SELECT add_compression_policy('orderbook_snapshots', INTERVAL '7 days');
-
--- Optional: Retain only 6 months of data
-SELECT add_retention_policy('orderbook_snapshots', INTERVAL '180 days');
+CREATE OR REPLACE VIEW orderhistory AS
+    SELECT *, created_at AS trade_time
+    FROM user_trades
+    WHERE status NOT IN ('open', 'partially_filled');
 
 
-CREATE TABLE candlestick_data (
+-- Time-series tables below. The chart currently streams klines straight from
+-- Binance (components/trading/CandleStickChart.jsx), so candlestick_data is
+-- only populated if you backfill it.
+CREATE TABLE IF NOT EXISTS candlestick_data (
     time TIMESTAMPTZ NOT NULL,
     symbol VARCHAR(20) NOT NULL,
     interval VARCHAR(5) NOT NULL,
@@ -116,29 +101,73 @@ CREATE TABLE candlestick_data (
     volume NUMERIC(25, 8) NOT NULL
 );
 
+CREATE INDEX IF NOT EXISTS idx_candlestick_symbol ON candlestick_data (symbol);
+CREATE INDEX IF NOT EXISTS idx_candlestick_interval ON candlestick_data (interval);
 
--- Add indexes for faster queries
-CREATE INDEX idx_candlestick_symbol ON candlestick_data (symbol);
-CREATE INDEX idx_candlestick_interval ON candlestick_data (interval);
-
--- Convert to hypertable with time partitioning
-SELECT create_hypertable('candlestick_data', 'time', chunk_time_interval =>
- INTERVAL '1 day');
+SELECT create_hypertable('candlestick_data', 'time',
+    chunk_time_interval => INTERVAL '1 day', if_not_exists => TRUE);
 
 
--- Set chunk size to 1 day for high-frequency intervals (like 1m, 5m)
--- and a larger interval for lower frequency data
-SELECT set_chunk_time_interval('candlestick_data', INTERVAL '1 day');
-
--- Enable compression with proper ordering to optimize query patterns
-ALTER TABLE candlestick_data SET (
-    timescaledb.compress,
-    timescaledb.compress_segmentby = 'symbol,interval',
-    timescaledb.compress_orderby = 'time DESC'
+CREATE TABLE IF NOT EXISTS orderbook_snapshots (
+    id BIGSERIAL,
+    timestamp TIMESTAMPTZ NOT NULL,
+    bids JSONB NOT NULL,
+    asks JSONB NOT NULL,
+    PRIMARY KEY (timestamp, id)
 );
 
--- Create compression policy (compress chunks older than 3 days)
-SELECT add_compression_policy('candlestick_data', INTERVAL '3 days');
+SELECT create_hypertable('orderbook_snapshots', 'timestamp',
+    chunk_time_interval => INTERVAL '1 day', if_not_exists => TRUE);
 
--- Create retention policy (remove data older than 1 year)
-SELECT add_retention_policy('candlestick_data', INTERVAL '180 days');
+CREATE INDEX IF NOT EXISTS idx_orderbook_snapshots_time
+    ON orderbook_snapshots (timestamp DESC);
+
+
+-- Written by insertOrderBookUpdate() / insertSnapshot() in lib/db-utils.js.
+CREATE TABLE IF NOT EXISTS order_book_updates (
+    time TIMESTAMPTZ NOT NULL,
+    symbol TEXT NOT NULL,
+    side TEXT NOT NULL,
+    price DECIMAL(18,8) NOT NULL,
+    quantity DECIMAL(18,8) NOT NULL,
+    first_update_id BIGINT,
+    last_update_id BIGINT
+);
+
+SELECT create_hypertable('order_book_updates', 'time',
+    chunk_time_interval => INTERVAL '1 day', if_not_exists => TRUE);
+
+CREATE INDEX IF NOT EXISTS idx_order_book_updates_symbol_time
+    ON order_book_updates (symbol, time DESC);
+
+
+CREATE TABLE IF NOT EXISTS order_book_snapshots (
+    time TIMESTAMPTZ NOT NULL,
+    symbol TEXT NOT NULL,
+    last_update_id BIGINT,
+    bids JSONB NOT NULL,
+    asks JSONB NOT NULL
+);
+
+SELECT create_hypertable('order_book_snapshots', 'time',
+    chunk_time_interval => INTERVAL '1 day', if_not_exists => TRUE);
+
+
+-- Optional: compression and retention. These were in the original schema but
+-- are commented out because they need periodic background jobs and are not
+-- worth running against a local dev database.
+--
+-- ALTER TABLE orderbook_snapshots SET (
+--     timescaledb.compress,
+--     timescaledb.compress_orderby = 'timestamp DESC'
+-- );
+-- SELECT add_compression_policy('orderbook_snapshots', INTERVAL '7 days');
+-- SELECT add_retention_policy('orderbook_snapshots', INTERVAL '180 days');
+--
+-- ALTER TABLE candlestick_data SET (
+--     timescaledb.compress,
+--     timescaledb.compress_segmentby = 'symbol,interval',
+--     timescaledb.compress_orderby = 'time DESC'
+-- );
+-- SELECT add_compression_policy('candlestick_data', INTERVAL '3 days');
+-- SELECT add_retention_policy('candlestick_data', INTERVAL '180 days');

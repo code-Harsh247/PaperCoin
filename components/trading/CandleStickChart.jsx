@@ -1,11 +1,12 @@
 // components/CandlestickChart.js
 'use client'
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import * as am5 from '@amcharts/amcharts5';
 import * as am5xy from '@amcharts/amcharts5/xy';
 import am5themes_Animated from '@amcharts/amcharts5/themes/Animated';
 import am5themes_Dark from '@amcharts/amcharts5/themes/Dark';
 import { useBacktest } from '@/Context/BacktestContext';
+import useReconnectingWebSocket from '@/lib/useReconnectingWebSocket';
 
 const CandleStickChart = ({ symbol = 'btcusdt', defaultInterval = '1d' }) => {
   const [interval, setInterval] = useState(defaultInterval);
@@ -242,11 +243,7 @@ const CandleStickChart = ({ symbol = 'btcusdt', defaultInterval = '1d' }) => {
   }, [chartData]);
 
   // WebSocket connection
-  useEffect(() => {
-    // WebSocket for real-time data
-    const socket = new WebSocket(`wss://stream.binance.com:9443/ws/${symbol.toLowerCase()}@kline_${interval}`);
-
-    socket.onmessage = (event) => {
+  const handleKlineMessage = useCallback((event) => {
       const message = JSON.parse(event.data);
       const kline = message.k; // Kline data from Binance
 
@@ -278,13 +275,26 @@ const CandleStickChart = ({ symbol = 'btcusdt', defaultInterval = '1d' }) => {
         
         return newData;
       });
-    };
+  }, []);
 
-    // Cleanup function to close WebSocket on component unmount
-    return () => {
-      socket.close();
-    };
+  const { status: klineStatus } = useReconnectingWebSocket(
+    `wss://stream.binance.com:9443/ws/${symbol.toLowerCase()}@kline_${interval}`,
+    { onMessage: handleKlineMessage }
+  );
+
+  // Candles that closed while the socket was down never arrive over the
+  // stream, so refetch history once it comes back. Skipped on the first
+  // connect, where the chart setup effect has already fetched.
+  const hasConnectedRef = useRef(false);
+  useEffect(() => {
+    hasConnectedRef.current = false;
   }, [symbol, interval]);
+
+  useEffect(() => {
+    if (klineStatus !== 'open') return;
+    if (hasConnectedRef.current) fetchCryptoData();
+    hasConnectedRef.current = true;
+  }, [klineStatus]);
 
   return (
     <div className="flex flex-col w-full h-full bg-[#111722]">

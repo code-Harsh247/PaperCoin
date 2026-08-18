@@ -12,7 +12,7 @@ export async function GET(request) {
   const state = searchParams.get('state');
 
   // Retrieve the stored state from cookies to verify CSRF protection
-  const storedState = cookies().get('oauth_state')?.value;
+  const storedState = (await cookies()).get('oauth_state')?.value;
 
   // Verify state parameter to prevent CSRF attacks
   if (!state || !storedState || state !== storedState) {
@@ -66,18 +66,24 @@ export async function GET(request) {
 
     // Add or update user in the database
     try {
-      const userId = await addUsertoDb(dbUserInfo);
+      // addUsertoDb only returns an id for users it just created, so fall back
+      // to a lookup for anyone signing in again.
+      const userId = (await addUsertoDb(dbUserInfo)) ?? (await getUserId(userInfo.email));
       console.log('User added/updated in database:', userId);
       
-      // Initialize default funds only if the user doesn't already have an entry
-      const defaultFundQuery = `
-        INSERT INTO user_portfolios (user_id, total_balance, total_invested, available_funds, last_updated, btccoins)
-        VALUES ($1, 10000, 0, 10000, NOW(), 0)
-        ON CONFLICT (user_id) DO NOTHING;
-      `;
-      
-      await runQuery(defaultFundQuery, [userId]);
-      console.log('Default funds initialization attempted for user:', userId);
+      // Initialize default funds only if the user doesn't already have an entry.
+      // user_portfolios holds one row per snapshot rather than one per user, so
+      // this guards on "has no snapshots yet" instead of a unique constraint.
+      if (userId) {
+        const defaultFundQuery = `
+          INSERT INTO user_portfolios (user_id, total_balance, total_invested, available_funds, last_updated, btccoins)
+          SELECT $1, 10000, 0, 10000, NOW(), 0
+          WHERE NOT EXISTS (SELECT 1 FROM user_portfolios WHERE user_id = $1);
+        `;
+
+        await runQuery(defaultFundQuery, [userId]);
+        console.log('Default funds initialization attempted for user:', userId);
+      }
     } catch (dbError) {
       console.error('Database error:', dbError);
       // You can decide whether to fail the auth flow or continue

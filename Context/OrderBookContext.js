@@ -3,6 +3,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import { useAuthStore } from '@/store/useAuthStore';
 import axios from 'axios';
 import { useBacktest } from './BacktestContext';
+import useReconnectingWebSocket from '@/lib/useReconnectingWebSocket';
 // Create the context
 const OrderbookContext = createContext();
 
@@ -20,8 +21,7 @@ export const OrderbookProvider = ({ symbol, children }) => {
     bids: [], // Array of {price, amount, isVirtual: true}
     asks: [], // Array of {price, amount, isVirtual: true}
   });
-  const { backtestActive, backtestConfig } = useBacktest(); 
-  const [connected, setConnected] = useState(false);
+  const { backtestActive, backtestConfig } = useBacktest();
   const [error, setError] = useState(null);
   const [isLoadingTrades, setIsLoadingTrades] = useState(false); 
   // Calculate totals for the orderbook entries
@@ -245,81 +245,74 @@ const fetchUserTrades = useCallback(async () => {
   }
 }, [user, clearVirtualOrders]);
 
-  // Connect to WebSocket
-  useEffect(() => {
-    if (!symbol) return;
-    // console.log("Backtesting url : ",process.env.BACKTEST_URL);
-    const url = backtestActive
-      ? "ws://20.193.153.208:8080"
-      : `wss://stream.binance.com:9443/ws/${symbol.toLowerCase()}@depth20@1000ms`;
-  
-    const ws = new WebSocket(url);
-  
-    ws.onopen = () => {
-      console.log(`WebSocket connected to ${backtestActive ? 'BACKTEST' : 'LIVE'} for ${symbol}`);
-      setConnected(true);
-      setError(null);
-  
-      if (backtestActive && backtestConfig) {
-        // Send config to the backtest stream
-        console.log('Sending backtest configuration:', backtestConfig);
-        ws.send(JSON.stringify({
-          startDate: backtestConfig.startDateTime,
-          endDate: backtestConfig.endDateTime,
-          speed: backtestConfig.speed,
-        }));
-      }
-    };
-  
-    ws.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        if(backtestActive) console.log("Backtest data: ",data);
-        // Process the orderbook data
-        if (!data.bids || !data.asks) {
-          console.warn('Skipping message: missing bids or asks');
-          return;
-        }
-        const processedBids = data.bids.map(([price, amount]) => ({
-          price,
-          amount
-        }));
-  
-        const processedAsks = data.asks.map(([price, amount]) => ({
-          price,
-          amount
-        }));
-  
-        setOrderbook({
-          bids: processedBids,
-          asks: processedAsks,
-          lastUpdateId: data.lastUpdateId
-        });
-      } catch (err) {
-        console.error('Error processing WebSocket message:', err);
-        setError('Failed to process orderbook data');
-      }
-    };
-  
-    ws.onerror = (error) => {
-      console.error('WebSocket error:', error);
-      setConnected(false);
-      setError('WebSocket connection error');
-    };
-  
-    ws.onclose = () => {
-      console.log('WebSocket disconnected');
-      setConnected(false);
-    };
-  
-    // Cleanup on unmount
-    return () => {
-      if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
-        ws.close();
-      }
-    };
+  // Connect to WebSocket. The hook handles dropped connections and retries on
+  // its own, so a wifi blip or VPN switch no longer leaves the book frozen.
+  const streamUrl = symbol
+    ? (backtestActive
+        ? 'ws://20.193.153.208:8080'
+        : `wss://stream.binance.com:9443/ws/${symbol.toLowerCase()}@depth20@1000ms`)
+    : null;
+
+  const handleStreamOpen = useCallback((socket) => {
+    console.log(`WebSocket connected to ${backtestActive ? 'BACKTEST' : 'LIVE'} for ${symbol}`);
+    setError(null);
+
+    if (backtestActive && backtestConfig) {
+      // Send config to the backtest stream. Re-sent on every reconnect, since
+      // the backtest server needs it before it will replay anything.
+      console.log('Sending backtest configuration:', backtestConfig);
+      socket.send(JSON.stringify({
+        startDate: backtestConfig.startDateTime,
+        endDate: backtestConfig.endDateTime,
+        speed: backtestConfig.speed,
+      }));
+    }
   }, [symbol, backtestActive, backtestConfig]);
-  
+
+  const handleStreamMessage = useCallback((event) => {
+    try {
+      const data = JSON.parse(event.data);
+      if (backtestActive) console.log("Backtest data: ", data);
+      // Process the orderbook data
+      if (!data.bids || !data.asks) {
+        console.warn('Skipping message: missing bids or asks');
+        return;
+      }
+      const processedBids = data.bids.map(([price, amount]) => ({
+        price,
+        amount
+      }));
+
+      const processedAsks = data.asks.map(([price, amount]) => ({
+        price,
+        amount
+      }));
+
+      setOrderbook({
+        bids: processedBids,
+        asks: processedAsks,
+        lastUpdateId: data.lastUpdateId
+      });
+    } catch (err) {
+      console.error('Error processing WebSocket message:', err);
+      setError('Failed to process orderbook data');
+    }
+  }, [backtestActive]);
+
+  const { status: connectionStatus } = useReconnectingWebSocket(streamUrl, {
+    onOpen: handleStreamOpen,
+    onMessage: handleStreamMessage,
+  });
+
+  const connected = connectionStatus === 'open';
+
+  useEffect(() => {
+    if (connectionStatus === 'reconnecting') {
+      setError('Lost connection to the market feed. Reconnecting...');
+    }
+  }, [connectionStatus]);
+
+
 
   // Fetch user trades when component mounts or user changes
   useEffect(() => {
@@ -341,6 +334,7 @@ const fetchUserTrades = useCallback(async () => {
     virtualOrders,
     orderbook: getCompleteOrderbook(),
     connected,
+    connectionStatus,
     error,
     isLoadingTrades,
     addVirtualOrder,

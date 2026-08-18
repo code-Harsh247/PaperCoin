@@ -1,7 +1,8 @@
 // components/trading/PriceHeader.js
 'use client'
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useBacktest } from '@/Context/BacktestContext';
+import useReconnectingWebSocket from '@/lib/useReconnectingWebSocket';
 
 const PriceHeader = ({ symbol = 'btcusdt' }) => {
   const [priceData, setPriceData] = useState({
@@ -43,28 +44,28 @@ const PriceHeader = ({ symbol = 'btcusdt' }) => {
     };
 
     fetchTickerData();
-
-    // Set up WebSocket for real-time price updates
-    const ws = new WebSocket(`wss://stream.binance.com:9443/ws/${symbol.toLowerCase()}@ticker`);
-
-    ws.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-
-      setPriceData({
-        price: parseFloat(data.c),
-        priceChange: parseFloat(data.p),
-        priceChangePercent: parseFloat(data.P),
-        high24h: parseFloat(data.h),
-        low24h: parseFloat(data.l),
-        volume: parseFloat(data.v),
-        quoteVolume: parseFloat(data.q)
-      });
-    };
-
-    return () => {
-      ws.close();
-    };
   }, [symbol]);
+
+  // Real-time price updates. Each message carries the full 24h snapshot, so a
+  // reconnect catches up on its own without refetching.
+  const handleTickerMessage = useCallback((event) => {
+    const data = JSON.parse(event.data);
+
+    setPriceData({
+      price: parseFloat(data.c),
+      priceChange: parseFloat(data.p),
+      priceChangePercent: parseFloat(data.P),
+      high24h: parseFloat(data.h),
+      low24h: parseFloat(data.l),
+      volume: parseFloat(data.v),
+      quoteVolume: parseFloat(data.q)
+    });
+  }, []);
+
+  const { status: tickerStatus } = useReconnectingWebSocket(
+    `wss://stream.binance.com:9443/ws/${symbol.toLowerCase()}@ticker`,
+    { onMessage: handleTickerMessage }
+  );
 
   // Format large numbers with commas
   const formatNumber = (num) => {
@@ -143,7 +144,18 @@ const PriceHeader = ({ symbol = 'btcusdt' }) => {
         <div className="flex items-center">
           {/* Base/Quote Symbol */}
           <div className="mr-8">
-            <div className="text-xl font-bold">{symbol.toUpperCase()}</div>
+            <div className="flex items-center">
+              <span className="text-xl font-bold">{symbol.toUpperCase()}</span>
+              {tickerStatus !== 'open' && (
+                <span
+                  className="ml-2 flex items-center text-xs text-amber-400"
+                  title="The live feed dropped. Retrying automatically."
+                >
+                  <span className="w-2 h-2 mr-1 rounded-full bg-amber-400 animate-pulse" />
+                  {tickerStatus === 'connecting' ? 'Connecting' : 'Reconnecting'}
+                </span>
+              )}
+            </div>
             <div className="text-sm text-gray-400">
               {symbol.slice(0, -4).toUpperCase()} Price
             </div>
