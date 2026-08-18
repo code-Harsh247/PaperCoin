@@ -1,6 +1,7 @@
 'use client';
 import React, { useEffect, useState, useRef } from "react";
 import { useAuthStore } from "@/store/useAuthStore";
+import { useBacktest } from "@/Context/BacktestContext";
 import axios from "axios";
 
 const OrderHistory = () => {
@@ -9,12 +10,15 @@ const OrderHistory = () => {
   const [error, setError] = useState(null);
   const [cancellingIds, setCancellingIds] = useState(new Set());
   const { user } = useAuthStore();
+  const { backtestActive, sessionId, fillCounter } = useBacktest();
 
-  // Cancellation goes to the engine; the API raises the flag, the engine
+  // Cancellation goes to the engine — the session's isolated path during a
+  // backtest, the live path otherwise. The API raises the flag, the engine
   // releases the reservation and confirms. The next poll reflects it.
   const cancelTrade = async (orderId) => {
     try {
-      await axios.post("/api/orders/cancel", { order_id: orderId });
+      const url = backtestActive ? "/api/backtest/orders/cancel" : "/api/orders/cancel";
+      await axios.post(url, { order_id: orderId });
       return true;
     } catch (err) {
       console.error("[OrderHistory] Cancel failed:", err.response?.data || err.message);
@@ -46,10 +50,25 @@ const OrderHistory = () => {
     }
 
     try {
-      const response = await axios.post("/api/trades/fetchTrades", {
-        user_id: user.userId
-      });
-      const newTrades = response.data.trades || [];
+      let newTrades;
+      if (backtestActive) {
+        // Session orders, mapped to the table's legacy field names.
+        const { data } = await axios.get(`/api/backtest/orders?session_id=${sessionId}`);
+        newTrades = (data.orders || []).map((o) => ({
+          id: o.id,
+          trade_type: o.side === 'buy' ? 'bid' : 'ask',
+          price: o.limit_price ?? o.avg_fill_price ?? o.stop_price ?? 0,
+          amount: o.quantity,
+          filled_amount: o.filled_quantity,
+          status: o.status === 'cancelled' ? 'canceled' : o.status,
+          created_at: o.placed_at,
+        }));
+      } else {
+        const response = await axios.post("/api/trades/fetchTrades", {
+          user_id: user.userId
+        });
+        newTrades = response.data.trades || [];
+      }
 
       if (haveTradesChanged(tradesRef.current, newTrades)) {
         console.log("[OrderHistory] Trades updated");
@@ -63,19 +82,15 @@ const OrderHistory = () => {
     }
   };
 
-  // Initial fetch + polling every 3s
+  // Initial fetch + polling; refetches immediately when the mode flips or a
+  // backtest fill event arrives.
   useEffect(() => {
     if (!user?.userId) return;
 
-    // initial load
     fetchTrades();
-
-    const interval = setInterval(() => {
-      fetchTrades();
-    }, 2000);
-
+    const interval = setInterval(fetchTrades, 2000);
     return () => clearInterval(interval);
-  }, [user?.userId]);
+  }, [user?.userId, backtestActive, sessionId, fillCounter]);
 
   const handleCancelTrade = async (tradeId) => {
     setCancellingIds(prev => new Set(prev).add(tradeId));

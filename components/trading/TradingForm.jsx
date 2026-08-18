@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useOrderbook } from "@/Context/OrderBookContext";
+import { useBacktest } from "@/Context/BacktestContext";
 import axios from "axios";
 import { useAuthStore } from "@/store/useAuthStore";
 import { toast } from "react-hot-toast"; // Import the toast function
@@ -10,15 +11,24 @@ const API_TYPE = { Limit: "limit", Market: "market", "Stop Limit": "stop_limit" 
 
 export default function TradingForm() {
   const { rawOrderbook, connected, connectionStatus, refreshOrders } = useOrderbook();
+  const { backtestActive, sessionId, replayPrice, fillCounter } = useBacktest();
   const [balance, setBalance] = useState({ USDT: 0, BTC: 0, reservedUSDT: 0, reservedBTC: 0 });
   const { user } = useAuthStore();
 
-  // Spendable balances come from the engine's ledger. Refreshed on an interval
-  // because fills happen server-side whether or not this tab does anything.
+  // Spendable balances come from the engine's ledger — the session's isolated
+  // ledger during a backtest, the real one otherwise. Refreshed on an interval
+  // and on every fill event, because fills happen server-side whether or not
+  // this tab does anything.
   const fetchBalances = useCallback(async () => {
     if (!user?.userId) return;
     try {
-      const { data } = await axios.get("/api/balances");
+      let data;
+      if (backtestActive) {
+        const res = await axios.get(`/api/backtest/sessions/${sessionId}`);
+        data = res.data.balances ?? {};
+      } else {
+        ({ data } = await axios.get("/api/balances"));
+      }
       setBalance({
         USDT: parseFloat(data.cash_available) || 0,
         BTC: parseFloat(data.btc_available) || 0,
@@ -28,13 +38,13 @@ export default function TradingForm() {
     } catch (error) {
       console.error("Error fetching balances:", error);
     }
-  }, [user]);
+  }, [user, backtestActive, sessionId]);
 
   useEffect(() => {
     fetchBalances();
     const interval = setInterval(fetchBalances, 3000);
     return () => clearInterval(interval);
-  }, [fetchBalances]);
+  }, [fetchBalances, fillCounter]);
 
   const [orderType, setOrderType] = useState("Limit");
   const [buyPrice, setBuyPrice] = useState("");
@@ -47,8 +57,9 @@ export default function TradingForm() {
   const [sellError, setSellError] = useState("");
   const [marketPrice, setMarketPrice] = useState(null);
 
-  // One placement path for both sides: submit to the engine, then refresh the
-  // book overlay and balances so the reservation shows up immediately.
+  // One placement path for both sides. During a backtest, orders go to the
+  // session's isolated engine path — never to the live market. That routing
+  // is the core of backtest mode; everything else is display.
   const placeOrder = async (side, { price, stopPrice, amount }) => {
     const payload = {
       side,
@@ -57,7 +68,14 @@ export default function TradingForm() {
     };
     if (orderType !== "Market") payload.limit_price = String(price);
     if (orderType === "Stop Limit") payload.stop_price = String(stopPrice);
-    const { data } = await axios.post("/api/orders", payload);
+
+    let data;
+    if (backtestActive) {
+      payload.session_id = sessionId;
+      ({ data } = await axios.post("/api/backtest/orders", payload));
+    } else {
+      ({ data } = await axios.post("/api/orders", payload));
+    }
     refreshOrders();
     fetchBalances();
     return data;
@@ -80,6 +98,16 @@ export default function TradingForm() {
   const sellTotal = sellPrice && sellAmount ? parseInput(sellPrice) * parseInput(sellAmount) : 0;
 
   useEffect(() => {
+    // During a backtest the "market" is the replayed tape, not live Binance.
+    if (backtestActive) {
+      if (replayPrice) {
+        const p = parseFloat(replayPrice);
+        setMarketPrice(p);
+        if (!buyPrice) setBuyPrice(formatPrice(p));
+        if (!sellPrice) setSellPrice(formatPrice(p));
+      }
+      return;
+    }
     if (rawOrderbook && rawOrderbook.bids.length > 0 && rawOrderbook.asks.length > 0) {
       const bestBid = parseFloat(rawOrderbook.bids[0].price);
       const bestAsk = parseFloat(rawOrderbook.asks[0].price);
@@ -90,7 +118,7 @@ export default function TradingForm() {
       if (!buyPrice) setBuyPrice(formatPrice(avgPrice));
       if (!sellPrice) setSellPrice(formatPrice(avgPrice));
     }
-  }, [rawOrderbook, buyPrice, sellPrice]);
+  }, [rawOrderbook, buyPrice, sellPrice, backtestActive, replayPrice]);
 
   // Place buy order
   const handleBuy = async () => {
@@ -218,6 +246,14 @@ export default function TradingForm() {
 
   return (
     <div className="bg-[#111722] text-white p-4 rounded-xl w-full mx-auto shadow-xl border border-gray-800">
+      {/* Mode banner: the difference between simulating history and spending
+          the live balance should never be ambiguous. */}
+      {backtestActive && (
+        <div className="mb-3 px-3 py-2 rounded-lg bg-amber-500/15 border border-amber-500/40 text-amber-400 text-xs font-medium">
+          BACKTEST MODE — orders fill against replayed history in an isolated
+          session. Your real balance is untouched.
+        </div>
+      )}
       {/* Order Type Buttons */}
       <div className="flex space-x-3 mb-4 items-center justify-between">
         <div>
@@ -355,7 +391,7 @@ export default function TradingForm() {
           <button
             className="w-full bg-green-500 hover:bg-green-600 text-white py-2 rounded-lg font-medium shadow-lg text-sm transition-colors duration-200"
             onClick={handleBuy}
-            disabled={!connected}
+            disabled={backtestActive ? !replayPrice : !connected}
           >
             Buy BTC
           </button>
@@ -458,7 +494,7 @@ export default function TradingForm() {
           <button
             className="w-full bg-red-500 hover:bg-red-600 text-white py-2 rounded-lg font-medium shadow-lg text-sm transition-colors duration-200"
             onClick={handleSell}
-            disabled={!connected}
+            disabled={backtestActive ? !replayPrice : !connected}
           >
             Sell BTC
           </button>

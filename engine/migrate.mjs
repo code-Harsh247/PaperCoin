@@ -47,7 +47,9 @@ async function backfillBalances() {
     ORDER BY p.user_id, p.last_updated DESC;
   `);
 
+  let migrated = 0;
   for (const u of users) {
+    migrated += 1;
     await withTransaction(async (tx) => {
       await tx.query(
         `INSERT INTO balances (user_id, cash_available, btc_available)
@@ -64,16 +66,14 @@ async function backfillBalances() {
     console.log(`backfilled user ${u.user_id}: cash ${u.available_funds}, btc ${u.btccoins}`);
   }
   if (users.length === 0) console.log('backfill: nothing to do');
+  return migrated;
 }
 
-// The migration is only done if no value was created or destroyed.
-async function verify() {
-  const { rows: [legacy] } = await pool.query(`
-    SELECT COALESCE(SUM(available_funds), 0) AS cash,
-           COALESCE(SUM(btccoins), 0) AS btc
-    FROM (SELECT DISTINCT ON (user_id) available_funds, btccoins
-          FROM user_portfolios ORDER BY user_id, last_updated DESC) latest;
-  `);
+// Verification. The ledger must reconcile to balances always; the legacy
+// comparison only holds at the moment of the initial backfill — once live
+// trading begins, balances legitimately diverge from the frozen snapshots,
+// so that check is limited to runs where the backfill actually migrated.
+async function verify(backfilledUsers) {
   const { rows: [neu] } = await pool.query(`
     SELECT COALESCE(SUM(cash_available + cash_reserved), 0) AS cash,
            COALESCE(SUM(btc_available + btc_reserved), 0) AS btc
@@ -84,25 +84,33 @@ async function verify() {
            COALESCE(SUM(delta) FILTER (WHERE account LIKE 'btc%'), 0) AS btc
     FROM ledger_entries;
   `);
-
-  console.log(`legacy totals:  cash ${legacy.cash}  btc ${legacy.btc}`);
   console.log(`balance totals: cash ${neu.cash}  btc ${neu.btc}`);
   console.log(`ledger totals:  cash ${ledger.cash}  btc ${ledger.btc}`);
 
   const same = (a, b) => Number(a) === Number(b);
-  if (!same(legacy.cash, neu.cash) || !same(legacy.btc, neu.btc)) {
-    throw new Error('VERIFICATION FAILED: balances do not match legacy totals');
-  }
   if (!same(ledger.cash, neu.cash) || !same(ledger.btc, neu.btc)) {
     throw new Error('VERIFICATION FAILED: ledger does not reconcile to balances');
   }
-  console.log('verification passed: no value created or destroyed');
+
+  if (backfilledUsers > 0) {
+    const { rows: [legacy] } = await pool.query(`
+      SELECT COALESCE(SUM(available_funds), 0) AS cash,
+             COALESCE(SUM(btccoins), 0) AS btc
+      FROM (SELECT DISTINCT ON (user_id) available_funds, btccoins
+            FROM user_portfolios ORDER BY user_id, last_updated DESC) latest;
+    `);
+    console.log(`legacy totals:  cash ${legacy.cash}  btc ${legacy.btc}`);
+    if (!same(legacy.cash, neu.cash) || !same(legacy.btc, neu.btc)) {
+      throw new Error('VERIFICATION FAILED: balances do not match legacy totals');
+    }
+  }
+  console.log('verification passed: ledger reconciles exactly');
 }
 
 try {
   await applyMigrations();
-  await backfillBalances();
-  await verify();
+  const backfilledUsers = await backfillBalances();
+  await verify(backfilledUsers);
 } finally {
   await pool.end();
 }

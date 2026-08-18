@@ -20,6 +20,7 @@ import {
   settleMarketFills, persistOrderRow, notifyOrder,
 } from './settlement.mjs';
 import { parseUnits, fmtUnits, ZERO } from './money.mjs';
+import { BacktestManager } from './backtest/manager.mjs';
 
 const POLICY = process.env.ENGINE_FILL_POLICY === 'optimistic' ? 'optimistic' : 'pessimistic';
 const CHECK_INVARIANTS = process.env.ENGINE_CHECK_INVARIANTS === '1';
@@ -456,6 +457,13 @@ async function boot() {
   await listenForCommands();
   setInterval(() => enqueue(flushQueuePositions), 5000);
   startHealthServer();
+
+  // Backtest sessions run in this process but on their own chains — they
+  // never pass through the live engine's enqueue(), so a 20x replay cannot
+  // delay a live fill.
+  const backtests = new BacktestManager();
+  await backtests.init();
+
   log('info', 'engine up', { policy: POLICY, invariant_checks: CHECK_INVARIANTS });
 }
 

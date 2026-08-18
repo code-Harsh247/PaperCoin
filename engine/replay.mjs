@@ -18,6 +18,12 @@ export class ReplaySource extends EventEmitter {
     this.from = from;
     this.to = to;
     this.speed = speed; // 0 = as fast as possible; N = N x real time
+    this.halted = false;
+  }
+
+  // Stops the replay loop at the next trade boundary; run() resolves early.
+  halt() {
+    this.halted = true;
   }
 
   async run() {
@@ -30,9 +36,12 @@ export class ReplaySource extends EventEmitter {
     );
     let prevTs = null;
     for (const r of rows) {
+      if (this.halted) break;
       const ts = new Date(r.traded_at).getTime();
       if (this.speed > 0 && prevTs !== null) {
-        const wait = (ts - prevTs) / this.speed;
+        // Cap the wait so a capture gap (engine downtime) doesn't stall the
+        // replay for the outage's full wall-clock duration.
+        const wait = Math.min((ts - prevTs) / this.speed, 5000);
         if (wait > 0) await new Promise((res) => setTimeout(res, wait));
       }
       prevTs = ts;

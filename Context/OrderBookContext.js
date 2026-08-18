@@ -21,7 +21,7 @@ export const OrderbookProvider = ({ symbol, children }) => {
   });
   const { user } = useAuthStore();
   const [virtualOrders, setVirtualOrders] = useState({ bids: [], asks: [] });
-  const { backtestActive, backtestConfig } = useBacktest();
+  const { backtestActive, backtestConfig, sessionId, fillCounter } = useBacktest();
   const [error, setError] = useState(null);
 
   const calculateTotals = useCallback((entries) => {
@@ -54,14 +54,18 @@ export const OrderbookProvider = ({ symbol, children }) => {
   }, [orderbook, virtualOrders, calculateTotals]);
 
   // The user's open orders on the engine, shown as the "virtual" overlay in
-  // the book. Remaining quantity only — the filled part is no longer resting.
+  // the book — the backtest session's orders while one is running, live
+  // orders otherwise. Remaining quantity only.
   const refreshOrders = useCallback(async () => {
     if (!user?.userId) {
       setVirtualOrders({ bids: [], asks: [] });
       return;
     }
     try {
-      const { data } = await axios.get('/api/orders?scope=open');
+      const url = backtestActive
+        ? `/api/backtest/orders?session_id=${sessionId}&scope=open`
+        : '/api/orders?scope=open';
+      const { data } = await axios.get(url);
       const bids = [];
       const asks = [];
       for (const o of data.orders ?? []) {
@@ -80,20 +84,23 @@ export const OrderbookProvider = ({ symbol, children }) => {
     } catch (err) {
       console.error('Error fetching open orders:', err);
     }
-  }, [user]);
+  }, [user, backtestActive, sessionId]);
 
-  // Refresh on login and every few seconds; anything that places or cancels
-  // can also call refreshOrders() for an immediate update.
+  // Refresh on login, every few seconds, and on every backtest fill event;
+  // anything that places or cancels can also call refreshOrders() directly.
   useEffect(() => {
     refreshOrders();
     const interval = setInterval(refreshOrders, 3000);
     return () => clearInterval(interval);
-  }, [refreshOrders]);
+  }, [refreshOrders, fillCounter]);
 
-  // Live market depth stream (display only).
+  // Depth stream for the book visual (display only): live Binance normally,
+  // the local snapshot-replay server during a backtest. The replay server's
+  // address is config, not a constant — the old hardcoded IP was a VM that
+  // no longer exists.
   const streamUrl = symbol
     ? (backtestActive
-        ? 'ws://20.193.153.208:8080'
+        ? (process.env.NEXT_PUBLIC_BACKTEST_WS_URL || 'ws://localhost:8080')
         : `wss://stream.binance.com:9443/ws/${symbol.toLowerCase()}@depth20@1000ms`)
     : null;
 

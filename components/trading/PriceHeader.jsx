@@ -20,7 +20,10 @@ const PriceHeader = ({ symbol = 'btcusdt' }) => {
     endDateTime: '',
     speed: 1
   });
-  const { backtestActive, startBacktest, stopBacktest } = useBacktest();
+  const {
+    backtestActive, startBacktest, stopBacktest,
+    replayPrice, replayTs, sessionStatus, lastError,
+  } = useBacktest();
 
   useEffect(() => {
     // Fetch initial ticker data
@@ -114,24 +117,27 @@ const PriceHeader = ({ symbol = 'btcusdt' }) => {
     }));
   };
 
-  const handleStartBacktest = () => {
+  const [backtestError, setBacktestError] = useState(null);
+
+  // Dates from the modal are in the user's local time, not UTC — forcing a
+  // 'Z' suffix used to shift the requested window by the timezone offset.
+  const handleStartBacktest = async () => {
     const { startDate, startTime, endDate, endTime, speed } = backtestParams;
+    setBacktestError(null);
 
-    const start = new Date(`${startDate}T${startTime}:00Z`);
-    const end = new Date(`${endDate}T${endTime}:00Z`);
-
-    const formatUTC = (date) => {
-      const pad = (n, z = 2) => String(n).padStart(z, '0');
-      return `${date.getUTCFullYear()}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())} ` +
-        `${pad(date.getUTCHours())}:${pad(date.getUTCMinutes())}:${pad(date.getUTCSeconds())}.${pad(date.getUTCMilliseconds(), 3)}+00`;
+    const start = new Date(`${startDate}T${startTime}:00`);
+    const end = new Date(`${endDate}T${endTime}:00`);
+    const config = {
+      startDateTime: start.toISOString(),
+      endDateTime: end.toISOString(),
+      speed,
     };
-
-    const startDateTime = formatUTC(start);
-    const endDateTime = formatUTC(end);
-    const config = { startDateTime, endDateTime, speed };
-    console.log('Backtest Config:', config );
-    startBacktest(config); // ✅ Start backtest with config
-    setShowBacktestModal(false);
+    const result = await startBacktest(config);
+    if (result.ok) {
+      setShowBacktestModal(false);
+    } else {
+      setBacktestError(result.error);
+    }
   };
 
 
@@ -161,21 +167,33 @@ const PriceHeader = ({ symbol = 'btcusdt' }) => {
             </div>
           </div>
 
-          {/* Current Price */}
-          <div className="mr-8">
-            <div className="text-2xl font-bold">{formatPrice(priceData.price)}</div>
-            <div className="text-sm flex items-center">
-              <span className={`${isPriceUp ? 'text-green-500' : 'text-red-500'}`}>
-                {isPriceUp ? '+' : ''}{formatPrice(priceData.priceChange)}
-              </span>
-              <span className={`ml-1 ${isPriceUp ? 'text-green-500' : 'text-red-500'}`}>
-                ({isPriceUp ? '+' : ''}{priceData.priceChangePercent.toFixed(2)}%)
-              </span>
+          {/* Current Price — the replayed tape during a backtest, live otherwise */}
+          {backtestActive ? (
+            <div className="mr-8">
+              <div className="text-2xl font-bold text-amber-400">
+                {replayPrice ? formatPrice(parseFloat(replayPrice)) : '—'}
+              </div>
+              <div className="text-sm flex items-center text-amber-400">
+                <span className="w-2 h-2 mr-1 rounded-full bg-amber-400 animate-pulse" />
+                REPLAY {replayTs ? new Date(replayTs).toLocaleString() : 'starting…'}
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="mr-8">
+              <div className="text-2xl font-bold">{formatPrice(priceData.price)}</div>
+              <div className="text-sm flex items-center">
+                <span className={`${isPriceUp ? 'text-green-500' : 'text-red-500'}`}>
+                  {isPriceUp ? '+' : ''}{formatPrice(priceData.priceChange)}
+                </span>
+                <span className={`ml-1 ${isPriceUp ? 'text-green-500' : 'text-red-500'}`}>
+                  ({isPriceUp ? '+' : ''}{priceData.priceChangePercent.toFixed(2)}%)
+                </span>
+              </div>
+            </div>
+          )}
 
-          {/* 24h Stats */}
-          <div className="flex space-x-6">
+          {/* 24h Stats (live market; hidden during replay where they'd mislead) */}
+          <div className={`flex space-x-6 ${backtestActive ? 'hidden' : ''}`}>
             <div>
               <div className="text-xs text-gray-400">24h Change</div>
               <div className={`${isPriceUp ? 'text-green-500' : 'text-red-500'}`}>
@@ -303,6 +321,12 @@ const PriceHeader = ({ symbol = 'btcusdt' }) => {
                 </div>
               </div>
             </div>
+
+            {backtestError && (
+              <div className="mt-4 px-3 py-2 rounded bg-red-500/15 border border-red-500/40 text-red-400 text-sm">
+                {backtestError}
+              </div>
+            )}
 
             <div className="mt-6 flex justify-end space-x-3">
               <button

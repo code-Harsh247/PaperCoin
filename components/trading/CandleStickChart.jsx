@@ -15,7 +15,7 @@ const CandleStickChart = ({ symbol = 'btcusdt', defaultInterval = '1d' }) => {
   const candleSeriesRef = useRef(null);
   const volumeSeriesRef = useRef(null);
   const [chartData, setChartData] = useState([]);
-  const { backtestActive, backtestConfig } = useBacktest(); // Get backtest state from context
+  const { backtestActive, replayPrice, replayTs } = useBacktest();
 
   // Available intervals
   const intervals = [
@@ -225,14 +225,16 @@ const CandleStickChart = ({ symbol = 'btcusdt', defaultInterval = '1d' }) => {
       behavior: "zoomX"
     }));
 
-    // Fetch initial data
-    fetchCryptoData();
+    // Fetch initial data — live history only. In backtest mode the chart is
+    // built from replayed ticks instead, starting empty.
+    if (!backtestActive) fetchCryptoData();
+    else setChartData([]);
 
     // Cleanup function
     return () => {
       root.dispose();
     };
-  }, [symbol, interval]); // Re-initialize when symbol or interval changes
+  }, [symbol, interval, backtestActive]); // re-init on mode switch for fresh axes
 
   // Update chart data
   useEffect(() => {
@@ -242,8 +244,34 @@ const CandleStickChart = ({ symbol = 'btcusdt', defaultInterval = '1d' }) => {
     }
   }, [chartData]);
 
+  // Replay candles: aggregate the SSE trade ticks into one-minute buckets.
+  // Volume is unknowable from throttled ticks, so it stays zero — the price
+  // path is what a backtest chart is for.
+  useEffect(() => {
+    if (!backtestActive || !replayPrice || !replayTs) return;
+    const p = parseFloat(replayPrice);
+    const bucket = Math.floor(replayTs / 60000) * 60000;
+    setChartData((prev) => {
+      const data = [...prev];
+      const last = data[data.length - 1];
+      if (last && last.date === bucket) {
+        data[data.length - 1] = {
+          ...last,
+          high: Math.max(last.high, p),
+          low: Math.min(last.low, p),
+          close: p,
+        };
+      } else {
+        data.push({ date: bucket, open: p, high: p, low: p, close: p, volume: 0 });
+        if (data.length > 100) data.shift();
+      }
+      return data;
+    });
+  }, [backtestActive, replayPrice, replayTs]);
+
   // WebSocket connection
   const handleKlineMessage = useCallback((event) => {
+      if (backtestActive) return; // live klines must not paint over the replay
       const message = JSON.parse(event.data);
       const kline = message.k; // Kline data from Binance
 
@@ -275,7 +303,7 @@ const CandleStickChart = ({ symbol = 'btcusdt', defaultInterval = '1d' }) => {
         
         return newData;
       });
-  }, []);
+  }, [backtestActive]);
 
   const { status: klineStatus } = useReconnectingWebSocket(
     `wss://stream.binance.com:9443/ws/${symbol.toLowerCase()}@kline_${interval}`,
@@ -291,10 +319,10 @@ const CandleStickChart = ({ symbol = 'btcusdt', defaultInterval = '1d' }) => {
   }, [symbol, interval]);
 
   useEffect(() => {
-    if (klineStatus !== 'open') return;
+    if (klineStatus !== 'open' || backtestActive) return;
     if (hasConnectedRef.current) fetchCryptoData();
     hasConnectedRef.current = true;
-  }, [klineStatus]);
+  }, [klineStatus, backtestActive]);
 
   return (
     <div className="flex flex-col w-full h-full bg-[#111722]">
