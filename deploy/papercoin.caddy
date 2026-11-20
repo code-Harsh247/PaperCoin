@@ -1,0 +1,14 @@
+# PaperCoin's site block. setup.sh copies this to ~/proxy/sites/,
+# replacing SITE_ADDRESS with the real address.
+SITE_ADDRESS {
+	# Order-book replay for backtests (WebSocket; Caddy upgrades it as is).
+	handle /backtest-ws* {
+		reverse_proxy papercoin-bt:8080
+	}
+	handle {
+		reverse_proxy papercoin:3000 {
+			# Backtest sessions stream price ticks over SSE; don't buffer them.
+			flush_interval -1
+		}
+	}
+}

@@ -1,0 +1,118 @@
+# PaperCoin's stack. Only "web" and "bt-replay" join the shared "web" network
+# (the proxy reaches them as papercoin:3000 and papercoin-bt:8080); the
+# database is reachable only from inside this stack and publishes no ports.
+#
+# Run from this folder:  sudo docker compose up -d --build
+# Values like ${JWT_SECRET} come from ./.env, which setup.sh creates.
+name: papercoin
+
+x-app-build: &app-build
+  context: ..
+  args:
+    NEXT_PUBLIC_APP_URL: https://${SITE_ADDRESS}
+    NEXT_PUBLIC_BACKTEST_WS_URL: wss://${SITE_ADDRESS}/backtest-ws
+
+x-db-env: &db-env
+  DATABASE_URL: postgres://papercoin:${POSTGRES_PASSWORD}@db:5432/papercoin
+  NODE_ENV: production
+
+services:
+  db:
+    image: timescale/timescaledb:latest-pg17
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: papercoin
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: papercoin
+    volumes:
+      - pgdata:/var/lib/postgresql/data   # all user data lives here; keep this volume
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U papercoin -d papercoin"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    mem_limit: 2g
+    networks: [internal]
+
+  # Runs once per deploy: schema, engine migrations, retention policies.
+  migrate:
+    build: *app-build
+    image: papercoin-app
+    command: ["node", "engine/migrate.mjs"]
+    environment:
+      <<: *db-env
+      ENGINE_RETENTION_DAYS: "30"   # days of trades / order-book snapshots kept for backtesting
+    depends_on:
+      db: { condition: service_healthy }
+    restart: "no"
+    networks: [internal]
+
+  web:
+    build: *app-build
+    image: papercoin-app
+    restart: unless-stopped
+    environment:
+      <<: *db-env
+      JWT_SECRET: ${JWT_SECRET}
+      NEXT_PUBLIC_APP_URL: https://${SITE_ADDRESS}
+      OAUTH_CLIENT_ID: ${OAUTH_CLIENT_ID:-}
+      OAUTH_CLIENT_SECRET: ${OAUTH_CLIENT_SECRET:-}
+    expose: ["3000"]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    mem_limit: 1g
+    networks:
+      internal: {}
+      web:
+        aliases: [papercoin]
+
+  # The trading engine: one always-on process, the only writer of order state.
+  engine:
+    build: *app-build
+    image: papercoin-app
+    command: ["node", "engine/index.mjs"]
+    restart: unless-stopped
+    environment:
+      <<: *db-env
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    mem_limit: 512m
+    networks: [internal]
+
+  # Standalone repo (PaperCoin_Backtesting_Server), cloned next to this one.
+  bt-ingest:
+    build: ../../papercoin-bt
+    image: papercoin-bt
+    command: ["node", "index.js"]
+    restart: unless-stopped
+    environment:
+      <<: *db-env
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    mem_limit: 256m
+    networks: [internal]
+
+  bt-replay:
+    build: ../../papercoin-bt
+    image: papercoin-bt
+    command: ["node", "backtest.js"]
+    restart: unless-stopped
+    environment:
+      <<: *db-env
+      BACKTEST_PORT: "8080"
+    expose: ["8080"]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    mem_limit: 256m
+    networks:
+      internal: {}
+      web:
+        aliases: [papercoin-bt]
+
+volumes:
+  pgdata:
+
+networks:
+  internal: {}
+  web:
+    external: true
