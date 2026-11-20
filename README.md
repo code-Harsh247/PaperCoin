@@ -4,6 +4,8 @@ A full-stack crypto paper-trading platform that lets users trade BTC risk-free
 using live Binance market data — real prices, virtual funds, and orders that
 fill for real reasons, not on faith.
 
+**Live demo: [papercoin.129-225-109-238.sslip.io](https://papercoin.129-225-109-238.sslip.io)**
+
 ## What this is
 
 Most paper-trading demos fake fills: an order goes in and a balance updates,
