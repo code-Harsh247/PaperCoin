@@ -44,14 +44,16 @@ transition after that belongs to the engine — one writer, no races.
 - **Queue position**: a resting order joins behind the volume already at its
   price. Trades at that price drain the queue first; only overflow fills us.
   Trading *through* the price fills the remainder at our limit price.
-- **Price-time priority between simulated orders**: one trade is shared, not
-  handed to every order in full. Orders the print went *through* fill by
-  inference (the whole level was swept); orders exactly at the print queue
-  behind their real `queue_ahead` *and* behind earlier simulated orders at
-  that price (`joinSeq`), and the trade fills that combined line front to
-  back. So ten users at a price can't fill 10 BTC from a 1 BTC trade.
-  `allocateTrade` in `fillModel.mjs`; a property test checks the at-price
-  total never exceeds the trade.
+- **Users are independent.** Each user's orders are matched against the real
+  market as if no other PaperCoin user existed, so one user's orders never
+  change another's fills. Paper trading is practice against the market, not
+  against other users. Within one user's own orders the trade is still shared
+  in price-time priority: orders the print went *through* fill by inference,
+  and orders exactly at the print queue behind their real `queue_ahead` and
+  behind that user's earlier orders at the price (`joinSeq`), so a user's own
+  orders can't fill the same real volume twice. `allocateTradePerAccount` in
+  `fillModel.mjs`; property tests check that each user's result equals that
+  user matched alone, and that one queue never fills more than the trade.
 - **Cancellations ahead of us are unknowable** from L2 data. The pessimistic
   default only applies the hard cap (no more can be ahead than rests at the
   level); the optimistic policy also credits shrinkage — and will double-count
@@ -73,8 +75,7 @@ transition after that belongs to the engine — one writer, no races.
 - Trade-only replay (`replay.mjs`) has no depth capture, so replayed queue
   positions start at zero — deterministic, but more optimistic than live.
 - Queue inference from L2 is an estimate by nature; see the policy note above.
-- No market impact. Simulated orders never move the real market, so a
-  trade-through fills every simulated order at the swept level, and two
-  market orders in the same instant both walk the same real book. Sharing a
-  book walk across market orders would mean tracking per-level consumption
-  between depth updates; not built.
+- No market impact, by design. Simulated orders never move the real market,
+  and different users never compete for the same real volume: ten users at
+  a price can each fill against the same 1 BTC trade. Each user's fills are
+  realistic on their own; the platform-wide total is not meant to be.

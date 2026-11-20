@@ -5,6 +5,7 @@ import { OrderBook, SequenceGapError } from '../book.mjs';
 import {
   applyTradeToRestingLimit, applyDepthToQueue, walkBook, vwap, stopTriggered, aggressorOf,
   allocateTrade,
+  allocateTradePerAccount,
 } from '../fillModel.mjs';
 
 // ---------- money ----------
@@ -270,6 +271,46 @@ test('property: orders at the trade price never fill more than the trade', () =>
     assert.ok(total <= trade.qty, `filled ${fmtUnits(total)} from a ${fmtUnits(trade.qty)} trade`);
     for (const x of allocateTrade(orders, trade)) {
       assert.ok(x.fillQty <= x.order.remaining && x.queueAhead >= 0n);
+    }
+  }
+});
+
+test('users are independent: another user ahead does not reduce my fill', () => {
+  // Same order shape as the Rule 4 example, but A and B are different users.
+  const a = { ...rest(1, 'buy', '64000', '0.5', '2', 1), userId: 'A' };
+  const b = { ...rest(2, 'buy', '64000', '1', '3', 2), userId: 'B' };
+  const res = allocateTradePerAccount([a, b], sell('64000', '4'), (o) => o.userId);
+  const fillOf = (o) => res.find((x) => x.order === o).fillQty;
+  assert.equal(fillOf(a), u('0.5'));
+  assert.equal(fillOf(b), u('1')); // 4 - 3 real ahead = 1, A is ignored
+  // Each user gets exactly what they would get alone.
+  assert.equal(fillOf(b), applyTradeToRestingLimit(b, sell('64000', '4')).fillQty);
+});
+
+test("one user's own orders still share the trade in time priority", () => {
+  const first = { ...rest(1, 'buy', '64000', '0.5', '2', 1), userId: 'A' };
+  const second = { ...rest(2, 'buy', '64000', '1', '3', 2), userId: 'A' };
+  const res = allocateTradePerAccount([first, second], sell('64000', '4'), (o) => o.userId);
+  const total = res.reduce((s, x) => s + x.fillQty, 0n);
+  assert.equal(total, u('1')); // same as the shared queue: 0.5 + 0.5
+});
+
+test('property: per-account result == each account matched alone', () => {
+  const r = prng(31);
+  for (let i = 0; i < 1000; i++) {
+    const orders = Array.from({ length: 1 + Math.floor(r() * 6) }, (_, k) => ({
+      ...rest(k + 1, 'buy', '64000', (0.001 + r() * 2).toFixed(8), (r() * 3).toFixed(8), k + 1),
+      userId: Math.floor(r() * 3),
+    }));
+    const trade = sell('64000', (r() * 5).toFixed(8));
+    const res = allocateTradePerAccount(orders, trade, (o) => o.userId);
+    for (const user of new Set(orders.map((o) => o.userId))) {
+      const alone = allocateTrade(orders.filter((o) => o.userId === user), trade);
+      for (const x of alone) {
+        const y = res.find((z) => z.order === x.order);
+        assert.equal(y.fillQty, x.fillQty);
+        assert.equal(y.queueAhead, x.queueAhead);
+      }
     }
   }
 });

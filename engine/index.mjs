@@ -13,7 +13,7 @@ import http from 'node:http';
 import { pool, withTransaction } from './db.mjs';
 import { MarketDataService } from './marketData.mjs';
 import {
-  allocateTrade, applyDepthToQueue, walkBook, stopTriggered,
+  allocateTradePerAccount, applyDepthToQueue, walkBook, stopTriggered,
 } from './fillModel.mjs';
 import {
   reserveAndOpen, rejectOrder, applyReservedFill, cancelOrder,
@@ -249,10 +249,12 @@ async function processTrade(trade) {
     if (stopTriggered(order, trade.price)) await triggerStop(order);
   }
 
-  // 2. Resting limits: one trade is shared across all of them in price-time
-  //    priority, so simulated orders can't collectively fill more than traded.
+  // 2. Resting limits: each user is matched against the real market on their
+  //    own, so other users' orders never affect their fills. A user's own
+  //    orders at one price still share the trade in price-time priority.
   const settleBatch = [];
-  for (const r of allocateTrade([...orders.values()].filter(isRestingLimit), trade)) {
+  const resting = [...orders.values()].filter(isRestingLimit);
+  for (const r of allocateTradePerAccount(resting, trade, (o) => o.userId)) {
     const { order } = r;
     if (r.queueAhead !== order.queueAhead) {
       order.queueAhead = r.queueAhead;

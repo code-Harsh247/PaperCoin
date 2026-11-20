@@ -106,6 +106,23 @@ export function allocateTrade(orders, trade) {
   return results;
 }
 
+// Users are independent: each account's orders are matched against the real
+// market as if no other PaperCoin user existed, so one user's orders never
+// change another's fills. Within one account the trade is still shared in
+// price-time priority, so a user's own orders can't fill the same real volume
+// twice. `accountOf` returns the grouping key (the user id in the live engine).
+export function allocateTradePerAccount(orders, trade, accountOf) {
+  const byAccount = new Map();
+  for (const o of orders) {
+    const key = accountOf(o);
+    if (!byAccount.has(key)) byAccount.set(key, []);
+    byAccount.get(key).push(o);
+  }
+  const results = [];
+  for (const group of byAccount.values()) results.push(...allocateTrade(group, trade));
+  return results;
+}
+
 // Queue policy on depth updates. L2 depth cannot tell us whether volume that
 // vanished at our level was ahead of us or behind us — both are consistent
 // with what we observe. Pessimistic takes only the hard bound: no more can be
