@@ -4,6 +4,7 @@ import { cookies } from 'next/headers';
 import { SignJWT } from 'jose';
 import { addUsertoDb, getUserId } from '@/lib/db-utils'; 
 import { runQuery } from '@/lib/db-utils'; // Import runQuery if it's not already included in db-utils
+import { getJwtSecret } from '@/lib/jwtSecret';
 
 export async function GET(request) {
   // Get the authorization code from the URL
@@ -117,7 +118,7 @@ export async function GET(request) {
 }
 
 async function createJWT(userInfo) {
-  const secret = new TextEncoder().encode(process.env.JWT_SECRET || 'your_jwt_secret_key');
+  const secret = getJwtSecret();
 
   const token = await new SignJWT({
     sub: userInfo.sub,

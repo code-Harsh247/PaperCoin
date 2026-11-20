@@ -64,9 +64,7 @@ const OrderHistory = () => {
           created_at: o.placed_at,
         }));
       } else {
-        const response = await axios.post("/api/trades/fetchTrades", {
-          user_id: user.userId
-        });
+        const response = await axios.post("/api/trades/fetchTrades");
         newTrades = response.data.trades || [];
       }
 

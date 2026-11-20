@@ -136,9 +136,7 @@ export default function Dashboard() {
         return;
       }
       try {
-        const response = await axios.post('/api/auth/fetchUserName', {
-          email: user.email,
-        });
+        const response = await axios.post('/api/auth/fetchUserName');
         if (response.data?.username) {
           console.log("Fetched UserName: ", response.data.username);
           setUser({
@@ -181,9 +179,7 @@ export default function Dashboard() {
 
     try {
       setIsDataLoading(true);
-      const response = await axios.post('/api/weeklySnapshots', {
-        user_id: user.userId
-      });
+      const response = await axios.post('/api/weeklySnapshots');
       setDashboardData(response.data.dashboard);
       setError(null);
     } catch (err) {

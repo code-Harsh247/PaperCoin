@@ -1,15 +1,12 @@
 import React, { useState, useEffect } from 'react'
 import { XCircle, Plus } from 'lucide-react'
 import axios from 'axios'
-import { useAuthStore } from '@/store/useAuthStore' // Update the path as needed
 
 const AddFundsModal = ({ isOpen, onClose, onSuccess }) => {
   const [funds, setFunds] = useState('')
   const [formError, setFormError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   
-  // Get user email from auth store
-  const userEmail = useAuthStore(state => state.user?.email)
   
   // Reset form when modal opens/closes
   useEffect(() => {
@@ -73,10 +70,8 @@ const AddFundsModal = ({ isOpen, onClose, onSuccess }) => {
     
     try {
       // Call the add funds API
-      const response = await axios.post('/api/addFunds', {
-        email: userEmail,
-        reqFunds: reqFunds
-      })
+      // The account credited comes from the session cookie on the server.
+      const response = await axios.post('/api/addFunds', { reqFunds })
       
       console.log('Funds added successfully:', response.data)
       

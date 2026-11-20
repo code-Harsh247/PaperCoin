@@ -1,43 +1,38 @@
 // app/api/auth/verify-session/route.js
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import jwt from "jsonwebtoken";
+import { jwtVerify } from "jose";
+import { getJwtSecret } from "@/lib/jwtSecret";
+import { getUserId } from "@/lib/db-utils";
 
 export async function GET() {
+  const cookieStore = await cookies();
+  const token = cookieStore.get('token')?.value;
+
+  if (!token) {
+    return NextResponse.json({
+      isAuthenticated: false,
+      message: "No authentication token found"
+    }, { status: 401 });
+  }
+
   try {
-    // Get the auth token from cookies
-    const cookieStore = await cookies();
-    const token = cookieStore.get('token')?.value;
+    const { payload } = await jwtVerify(token, getJwtSecret());
 
-    // If no token exists, user is not authenticated
-    if (!token) {
-      return NextResponse.json({ 
-        isAuthenticated: false,
-        message: "No authentication token found" 
-      }, { status: 401 });
-    }
-
-    // Verify the JWT token
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    
-    // Return user data from the token
+    // userId is looked up rather than read from the token: password logins
+    // never put it there, and the database is the authority on it anyway.
     return NextResponse.json({
       isAuthenticated: true,
       user: {
-        userId: decoded.userId,
-        email: decoded.email,
-        username: decoded.username
+        userId: await getUserId(payload.email),
+        email: payload.email,
+        username: payload.username
       },
       message: "User is authenticated"
     }, { status: 200 });
   } catch (error) {
-    // If token verification fails
-    console.error("Token verification error:", error);
-    
-    // Clear the invalid token
-    const cookieStore = await cookies();
+    console.error("Token verification error:", error.message);
     cookieStore.delete('token');
-    
     return NextResponse.json({
       isAuthenticated: false,
       message: "Invalid or expired token"

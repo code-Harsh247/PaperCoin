@@ -1,21 +1,30 @@
 import { NextResponse } from "next/server";
-import { runQuery, getUserId } from '@/lib/db-utils';
+import { runQuery } from '@/lib/db-utils';
+import { getAuthedUserId, unauthorized } from '@/lib/serverAuth';
+
+// Per-deposit ceiling. Also keeps String(amount) out of exponent notation
+// ("1e+21"), which NUMERIC would reject.
+const MAX_DEPOSIT = 1_000_000;
 
 // Deposits are a ledger event like everything else: append the entry, project
 // it onto the balance, one transaction. Deposits touch only cash_available, so
 // they cannot collide with the engine's reservation accounting.
+//
+// The account credited is always the logged-in user's. An email in the body
+// used to decide that, which let anyone credit any account.
 export async function POST(req) {
+    const userId = await getAuthedUserId();
+    if (!userId) return unauthorized();
+
     try {
-        const { email, reqFunds } = await req.json();
+        const { reqFunds } = await req.json();
 
         const amount = Number(reqFunds);
-        if (!Number.isFinite(amount) || amount <= 0) {
-            return NextResponse.json({ message: 'Funds must be a positive number' }, { status: 400 });
-        }
-
-        const userId = await getUserId(email);
-        if (!userId) {
-            return NextResponse.json({ message: 'User not found' }, { status: 404 });
+        if (!Number.isFinite(amount) || amount <= 0 || amount > MAX_DEPOSIT) {
+            return NextResponse.json(
+                { message: `Funds must be a positive number up to ${MAX_DEPOSIT.toLocaleString('en-US')}` },
+                { status: 400 }
+            );
         }
 
         const rows = await runQuery(
@@ -27,7 +36,7 @@ export async function POST(req) {
              SET cash_available = cash_available + $2, updated_at = NOW()
              WHERE user_id = $1
              RETURNING cash_available;`,
-            [userId, String(amount)]
+            [userId, amount.toFixed(8)]
         );
         if (rows.length === 0) {
             return NextResponse.json({ message: 'No balance account for user' }, { status: 404 });

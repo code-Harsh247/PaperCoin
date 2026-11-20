@@ -35,7 +35,7 @@ const PortfolioPerformance = () => {
 
     const fetchSnapshots = async () => {
       try {
-        const response = await axios.post("/api/portfolios/fetchall", { user_id: user.userId })
+        const response = await axios.post("/api/portfolios/fetchall")
         setSnapshots(response.data.portfolio || [])
       } catch (err) {
         console.error("Failed to fetch portfolio data:", err)

@@ -85,10 +85,8 @@ const UserNameModal = ({ isOpen, onClose, initialMode = 'set-username', email })
       setIsSubmitting(true)
       
       // Make API call to set username
-      const response = await axios.post('/api/auth/setUserName', {
-        email,
-        username
-      })
+      // Whose username changes comes from the session cookie on the server.
+      const response = await axios.post('/api/auth/setUserName', { username })
       
       // Handle successful response
       if (response.status === 200) {

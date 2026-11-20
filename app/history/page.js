@@ -16,9 +16,7 @@ export default function HistoryPage() {
     const fetchTrades = async () => {
       try {
         setIsLoading(true)
-        const response = await axios.post("/api/trades/fetchTrades", {
-          user_id: user.userId
-        })
+        const response = await axios.post("/api/trades/fetchTrades")
         console.log("Response from fetchTrades:", response)
         // Fix: Extract trades array from the response data
         setTrades(response.data.trades);

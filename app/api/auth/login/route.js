@@ -1,8 +1,9 @@
 // app/api/auth/login/route.js
 import { NextResponse } from "next/server";     
 import { authenticateUser } from "@/lib/db-utils";
-import jwt from "jsonwebtoken";
+import { SignJWT } from "jose";
 import { cookies } from "next/headers";
+import { getJwtSecret } from "@/lib/jwtSecret";
 
 export async function POST(request) {
     if(!request) {
@@ -31,14 +32,11 @@ export async function POST(request) {
         }
 
         // Generate JWT token
-        const token = jwt.sign(
-            { 
-                email: user.email,
-                username: user.username
-            },
-            process.env.JWT_SECRET,
-            { expiresIn: '24h' }
-        );
+        const token = await new SignJWT({ email: user.email, username: user.username })
+            .setProtectedHeader({ alg: 'HS256' })
+            .setIssuedAt()
+            .setExpirationTime('24h')
+            .sign(getJwtSecret());
         
         // Set the token in a cookie
         const cookieStore = await cookies();

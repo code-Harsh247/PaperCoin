@@ -1,20 +1,23 @@
-import {checkIfUserNameExists} from "@/lib/db-utils";
+// Username availability for the post-login username picker. Login-only: it is
+// only ever called after sign-in, and keeping it closed stops anonymous
+// enumeration of who has an account here.
+import { checkIfUserNameExists } from "@/lib/db-utils";
 import { NextResponse } from "next/server";
+import { getAuthedUserId, unauthorized } from "@/lib/serverAuth";
+import { validateUsername } from "@/lib/username";
 
 export async function POST(request) {
+  const userId = await getAuthedUserId();
+  if (!userId) return unauthorized();
+
   try {
     const { username } = await request.json();
-    
-    if (!username) {
-      return NextResponse.json(
-        { message: 'Username is required' },
-        { status: 400 }
-      );
+    const problem = validateUsername(username);
+    if (problem) {
+      return NextResponse.json({ message: problem }, { status: 400 });
     }
-    
-    // Check if username exists using your utility function
+
     const exists = await checkIfUserNameExists(username);
-    
     return NextResponse.json({ exists });
   } catch (error) {
     console.error('Error checking username:', error);

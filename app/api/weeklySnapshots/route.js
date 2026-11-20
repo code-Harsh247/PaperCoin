@@ -4,19 +4,18 @@
 //   available_funds  -> spendable cash (reserved cash excluded on purpose)
 //   btc_coins        -> total BTC held, including BTC reserved in open sells
 //   total_invested   -> average-cost basis of the position, derived from fills
+//
+// Always the logged-in user's summary; any user_id in the body is ignored.
 import { NextResponse } from "next/server";
 import { runQuery } from '@/lib/db-utils';
 import { computePosition } from '@/lib/position';
+import { getAuthedUserId, unauthorized } from '@/lib/serverAuth';
 
-export async function POST(req) {
+export async function POST() {
+  const user_id = await getAuthedUserId();
+  if (!user_id) return unauthorized();
+
   try {
-    const body = await req.json();
-    const { user_id } = body;
-
-    if (!user_id) {
-      return NextResponse.json({ error: "User ID is required" }, { status: 400 });
-    }
-
     const balances = await runQuery(
       `SELECT cash_available, cash_reserved, btc_available, btc_reserved, updated_at
        FROM balances WHERE user_id = $1`,

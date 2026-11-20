@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { jwtVerify } from 'jose';
 import { getUserId } from '@/lib/db-utils';
+import { getJwtSecret } from '@/lib/jwtSecret';
 
 export async function GET() {
   const token = (await cookies()).get('token')?.value;
@@ -13,8 +14,7 @@ export async function GET() {
   
   try {
     // Verify the JWT token
-    const secret = new TextEncoder().encode(process.env.JWT_SECRET);
-    const { payload } = await jwtVerify(token, secret);
+    const { payload } = await jwtVerify(token, getJwtSecret());
     const userId = await getUserId(payload.email);
     // Return user data (omitting sensitive information)
     return NextResponse.json({

@@ -1,6 +1,7 @@
 // middleware.js
 import { NextResponse } from 'next/server';
 import { jwtVerify } from 'jose';
+import { getJwtSecret } from '@/lib/jwtSecret';
 
 // Define which routes should be protected
 const protectedRoutes = ['/dashboard', '/profile', '/settings'];
@@ -20,8 +21,10 @@ export async function middleware(request) {
     
     try {
       // Verify the JWT token
-      const secret = new TextEncoder().encode(process.env.JWT_SECRET || 'your_jwt_secret_key');
-      await jwtVerify(token, secret);
+      // getJwtSecret throws when the secret is missing, landing in the catch
+      // below: a misconfigured deploy redirects to login rather than trusting
+      // tokens signed with a guessable key.
+      await jwtVerify(token, getJwtSecret());
       
       // If token is valid, allow the request to proceed
       return NextResponse.next();
