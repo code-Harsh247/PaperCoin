@@ -44,6 +44,14 @@ transition after that belongs to the engine — one writer, no races.
 - **Queue position**: a resting order joins behind the volume already at its
   price. Trades at that price drain the queue first; only overflow fills us.
   Trading *through* the price fills the remainder at our limit price.
+- **Price-time priority between simulated orders**: one trade is shared, not
+  handed to every order in full. Orders the print went *through* fill by
+  inference (the whole level was swept); orders exactly at the print queue
+  behind their real `queue_ahead` *and* behind earlier simulated orders at
+  that price (`joinSeq`), and the trade fills that combined line front to
+  back. So ten users at a price can't fill 10 BTC from a 1 BTC trade.
+  `allocateTrade` in `fillModel.mjs`; a property test checks the at-price
+  total never exceeds the trade.
 - **Cancellations ahead of us are unknowable** from L2 data. The pessimistic
   default only applies the hard cap (no more can be ahead than rests at the
   level); the optimistic policy also credits shrinkage — and will double-count
@@ -65,3 +73,8 @@ transition after that belongs to the engine — one writer, no races.
 - Trade-only replay (`replay.mjs`) has no depth capture, so replayed queue
   positions start at zero — deterministic, but more optimistic than live.
 - Queue inference from L2 is an estimate by nature; see the policy note above.
+- No market impact. Simulated orders never move the real market, so a
+  trade-through fills every simulated order at the swept level, and two
+  market orders in the same instant both walk the same real book. Sharing a
+  book walk across market orders would mean tracking per-level consumption
+  between depth updates; not built.

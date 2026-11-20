@@ -141,3 +141,7 @@ lib/                   shared server utilities (auth, db, position math)
 - Resting order queue position is estimated from L2 depth, not certain — the
   market only ever tells you total volume at a price, never who's ahead of
   you.
+- Simulated orders have no market impact: two market orders placed in the
+  same instant both fill against the same real order book. Resting limit
+  orders don't have this problem — they share each trade in price-time
+  priority.

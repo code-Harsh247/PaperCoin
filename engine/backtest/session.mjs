@@ -10,7 +10,7 @@
 import { EventEmitter } from 'node:events';
 import { withTransaction } from '../db.mjs';
 import { ReplaySource } from '../replay.mjs';
-import { applyTradeToRestingLimit, stopTriggered } from '../fillModel.mjs';
+import { allocateTrade, stopTriggered } from '../fillModel.mjs';
 import { parseUnits, fmtUnits, ZERO } from '../money.mjs';
 import { pool } from '../db.mjs';
 import * as bts from './settlement.mjs';
@@ -29,6 +29,7 @@ export class BacktestSession extends EventEmitter {
     this.orders = new Map();  // orderId -> mem order (BigInt fields)
     this.lastPrice = null;    // last replayed trade price (units)
     this.replayTs = null;     // replay clock (ms)
+    this.joinCounter = 0;     // time priority among this session's orders
     this.stopped = false;
     this.source = null;
     // Serialises trade processing and commands within this session.
@@ -92,13 +93,12 @@ export class BacktestSession extends EventEmitter {
       if (stopTriggered(order, trade.price)) await this.triggerStop(order);
     }
 
-    // Resting limits: identical rules to live, fills at the order's own price.
+    // Resting limits: identical rules to live — one replayed trade shared in
+    // price-time priority, fills at each order's own price.
     const batch = [];
-    for (const order of [...this.orders.values()].filter(isRestingLimit)) {
-      const r = applyTradeToRestingLimit(order, trade);
-      if (r === null) continue;
-      order.queueAhead = r.queueAhead;
-      if (r.fillQty > ZERO) batch.push({ order, qty: r.fillQty });
+    for (const r of allocateTrade([...this.orders.values()].filter(isRestingLimit), trade)) {
+      r.order.queueAhead = r.queueAhead;
+      if (r.fillQty > ZERO) batch.push({ order: r.order, qty: r.fillQty });
     }
     if (batch.length === 0) return;
 
@@ -144,6 +144,7 @@ export class BacktestSession extends EventEmitter {
       } else {
         order.queueAhead = ZERO; // no historical depth: documented limit
         await withTransaction(async (tx) => { await bts.reserveAndOpen(tx, this.id, order); });
+        order.joinSeq = ++this.joinCounter;
         this.orders.set(order.id, order);
         // A limit crossing the replayed price executes immediately, at its
         // own limit price (no book to improve against).
@@ -183,6 +184,7 @@ export class BacktestSession extends EventEmitter {
     order.triggered = true;
     if (order.type === 'stop_limit') {
       order.queueAhead = ZERO;
+      order.joinSeq = ++this.joinCounter; // joins the line when it triggers
       await withTransaction(async (tx) => { await bts.persistOrderRow(tx, order); });
       this.emit('event', { type: 'order_update', order_id: order.id, status: order.status, triggered: true });
       return;

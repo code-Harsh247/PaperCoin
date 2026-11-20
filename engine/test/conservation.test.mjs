@@ -11,7 +11,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { parseUnits as u, fmtUnits, mulUnits, ZERO } from '../money.mjs';
-import { applyTradeToRestingLimit } from '../fillModel.mjs';
+import { allocateTrade } from '../fillModel.mjs';
 
 // Deterministic PRNG so a failure is reproducible from the logged seed.
 function mulberry32(seed) {
@@ -137,12 +137,15 @@ function simulate(seed, steps) {
         qty: u((0.001 + rand() * 0.3).toFixed(8)),
         buyerIsMaker: rand() < 0.5,
       };
-      for (const o of [...open]) {
-        const r = applyTradeToRestingLimit(o, trade);
-        if (r === null) continue;
-        o.queueAhead = r.queueAhead;
-        if (r.fillQty > ZERO) applyFill(o, r.fillQty, o.limitPrice);
+      // Same allocation as the engine: the trade is shared in price-time
+      // priority. Orders exactly at the print can't, together, out-fill it.
+      let atPriceFilled = ZERO;
+      for (const r of allocateTrade([...open], trade)) {
+        r.order.queueAhead = r.queueAhead;
+        if (r.order.limitPrice === trade.price) atPriceFilled += r.fillQty;
+        if (r.fillQty > ZERO) applyFill(r.order, r.fillQty, r.order.limitPrice);
       }
+      assert.ok(atPriceFilled <= trade.qty, `phantom liquidity at trade (seed ${seed})`);
       assertInvariants('after trade');
     }
   }

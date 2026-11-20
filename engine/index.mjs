@@ -13,7 +13,7 @@ import http from 'node:http';
 import { pool, withTransaction } from './db.mjs';
 import { MarketDataService } from './marketData.mjs';
 import {
-  applyTradeToRestingLimit, applyDepthToQueue, walkBook, stopTriggered,
+  allocateTrade, applyDepthToQueue, walkBook, stopTriggered,
 } from './fillModel.mjs';
 import {
   reserveAndOpen, rejectOrder, applyReservedFill, cancelOrder,
@@ -37,6 +37,11 @@ const dirtyQueues = new Set();  // ids whose queue_ahead advanced without a fill
 const md = new MarketDataService();
 let tradeBuffer = [];           // trades held while the book is stale
 let lastTradePrice = null;
+
+// Time priority among simulated orders: the moment an order joined the line
+// at its price. A plain counter, not a clock, so replay stays deterministic.
+let joinCounter = 0;
+const nextJoinSeq = () => ++joinCounter;
 
 // Strict serialisation: every event goes through this chain, so handlers never
 // interleave even though they await database writes.
@@ -65,6 +70,7 @@ function memOrder(row) {
     // used for balance math.
     valueFilled: (filled * avg) / 100_000_000n,
     queueAhead: row.queue_ahead === null ? null : parseUnits(row.queue_ahead),
+    joinSeq: null, // assigned when the order starts resting
     lastSeenVolume: undefined,
     reservedRemaining: parseUnits(row.reserved_remaining),
     status: row.status,
@@ -167,6 +173,7 @@ async function placeResting(order) {
       await notifyOrder(tx, order);
     }
   });
+  order.joinSeq = nextJoinSeq();
   orders.set(order.id, order);
 
   // A limit that crosses the market executes its crossing portion immediately
@@ -242,11 +249,11 @@ async function processTrade(trade) {
     if (stopTriggered(order, trade.price)) await triggerStop(order);
   }
 
-  // 2. Resting limits: advance queues and collect fills.
+  // 2. Resting limits: one trade is shared across all of them in price-time
+  //    priority, so simulated orders can't collectively fill more than traded.
   const settleBatch = [];
-  for (const order of [...orders.values()].filter(isRestingLimit)) {
-    const r = applyTradeToRestingLimit(order, trade);
-    if (r === null) continue;
+  for (const r of allocateTrade([...orders.values()].filter(isRestingLimit), trade)) {
+    const { order } = r;
     if (r.queueAhead !== order.queueAhead) {
       order.queueAhead = r.queueAhead;
       dirtyQueues.add(order.id);
@@ -281,9 +288,11 @@ async function triggerStop(order) {
   log('info', 'stop triggered', { orderId: order.id, type: order.type });
 
   if (order.type === 'stop_limit') {
-    // Becomes a live limit order: joins the queue now, at the back.
+    // Becomes a live limit order: joins the queue now, at the back — behind
+    // real volume and behind simulated orders already resting there.
     order.queueAhead = md.book.volumeAt(order.side, order.limitPrice);
     order.lastSeenVolume = order.queueAhead;
+    order.joinSeq = nextJoinSeq();
     await withTransaction(async (tx) => { await persistOrderRow(tx, order); });
     await takerPhase(order); // it may have converted straight through the market
     return;
@@ -445,7 +454,14 @@ function startHealthServer() {
 async function boot() {
   const { rows } = await pool.query(
     `SELECT * FROM orders WHERE status IN ('open', 'partially_filled') ORDER BY id`);
-  for (const row of rows) orders.set(Number(row.id), memOrder(row));
+  // Rows arrive by id, i.e. placement order, which restores time priority for
+  // limits exactly. A stop-limit that had triggered really joined at trigger
+  // time; placement order is the closest record that survives a restart.
+  for (const row of rows) {
+    const order = memOrder(row);
+    order.joinSeq = nextJoinSeq();
+    orders.set(order.id, order);
+  }
   log('info', `recovered ${rows.length} open orders`);
 
   md.on('trade', (t) => enqueue(() => handleTrade(t)));

@@ -10,7 +10,7 @@
 import { EventEmitter } from 'node:events';
 import { pool } from './db.mjs';
 import { parseUnits, fmtUnits, ZERO } from './money.mjs';
-import { applyTradeToRestingLimit } from './fillModel.mjs';
+import { allocateTrade } from './fillModel.mjs';
 
 export class ReplaySource extends EventEmitter {
   constructor({ from, to, speed = 0 } = {}) {
@@ -75,21 +75,24 @@ async function determinismCheck(minutes) {
         // Seed orders around the opening price: buys below, sells above,
         // at 0.01% steps. queueAhead 0: replay has no depth capture, which is
         // the documented fidelity limit of trade-only replay.
+        // Each level also gets a second, later order (b1x, s1x...) so the
+        // replay exercises time priority between orders at the same price.
         orders = [];
+        let joinSeq = 0;
         for (let i = 1; i <= 5; i++) {
           const offset = (t.price * BigInt(i)) / 10000n;
-          orders.push({ side: 'buy', limitPrice: t.price - offset, remaining: parseUnits('0.05'), queueAhead: ZERO, id: `b${i}` });
-          orders.push({ side: 'sell', limitPrice: t.price + offset, remaining: parseUnits('0.05'), queueAhead: ZERO, id: `s${i}` });
+          for (const suffix of ['', 'x']) {
+            orders.push({ side: 'buy', limitPrice: t.price - offset, remaining: parseUnits('0.05'), queueAhead: ZERO, id: `b${i}${suffix}`, joinSeq: ++joinSeq });
+            orders.push({ side: 'sell', limitPrice: t.price + offset, remaining: parseUnits('0.05'), queueAhead: ZERO, id: `s${i}${suffix}`, joinSeq: ++joinSeq });
+          }
         }
       }
-      for (const o of orders) {
-        if (o.remaining === ZERO) continue;
-        const r = applyTradeToRestingLimit(o, t);
-        if (r === null) continue;
-        o.queueAhead = r.queueAhead;
+      const resting = orders.filter((o) => o.remaining > ZERO);
+      for (const r of allocateTrade(resting, t)) {
+        r.order.queueAhead = r.queueAhead;
         if (r.fillQty > ZERO) {
-          o.remaining -= r.fillQty;
-          fillLog.push(`${o.id}:${t.tradeId}:${fmtUnits(r.fillQty)}@${fmtUnits(o.limitPrice)}`);
+          r.order.remaining -= r.fillQty;
+          fillLog.push(`${r.order.id}:${t.tradeId}:${fmtUnits(r.fillQty)}@${fmtUnits(r.order.limitPrice)}`);
         }
       }
     });

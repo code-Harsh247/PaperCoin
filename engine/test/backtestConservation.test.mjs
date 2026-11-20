@@ -7,7 +7,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { pool, withTransaction } from '../db.mjs';
 import { parseUnits as u, fmtUnits, mulUnits, ZERO } from '../money.mjs';
-import { applyTradeToRestingLimit } from '../fillModel.mjs';
+import { allocateTrade } from '../fillModel.mjs';
 import * as bts from '../backtest/settlement.mjs';
 
 function mulberry32(seed) {
@@ -120,11 +120,9 @@ test('backtest settlement conserves cash and BTC across randomised fills/cancels
         const trade = { price, qty: u((0.01 + rand() * 0.4).toFixed(8)), buyerIsMaker: rand() < 0.5 };
 
         const fills = [];
-        for (const order of [...open]) {
-          const r = applyTradeToRestingLimit(order, trade);
-          if (r === null) continue;
-          order.queueAhead = r.queueAhead;
-          if (r.fillQty > ZERO) fills.push({ order, qty: r.fillQty });
+        for (const r of allocateTrade([...open], trade)) {
+          r.order.queueAhead = r.queueAhead;
+          if (r.fillQty > ZERO) fills.push({ order: r.order, qty: r.fillQty });
         }
         if (fills.length > 0) {
           await withTransaction(async (tx) => {

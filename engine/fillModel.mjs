@@ -44,6 +44,68 @@ export function applyTradeToRestingLimit(order, trade) {
   return { fillQty, queueAhead };
 }
 
+// Allocates ONE market trade across ALL resting orders it can touch, in
+// price-time priority. Applying applyTradeToRestingLimit to each order on its
+// own gave every order the full trade size, so ten 1 BTC orders at a price all
+// filled from a single 1 BTC trade. Here they share it.
+//
+// Price priority: an order the trade went *through* (better-priced than the
+// print) fills in full, as before. Every resting order at that price was
+// necessarily swept before the market could print beyond it, so these fills
+// are inferred from the sweep, not drawn from this trade's size.
+//
+// Time priority, among orders resting exactly at the trade price: each one's
+// place in the combined line is
+//     its own queueAhead            (real volume ahead of it)
+//   + the remaining size of every earlier simulated order at the same price
+// and the trade fills the first `trade.qty` units of that line, front to back.
+// Earlier = smaller `joinSeq`, the moment the order joined the queue (a
+// stop-limit joins when it triggers, not when it was placed).
+//
+// For a single order this reduces exactly to applyTradeToRestingLimit.
+// Returns [{ order, fillQty, queueAhead }] for every order the trade reached;
+// fillQty may be ZERO while queueAhead still advances.
+export function allocateTrade(orders, trade) {
+  const consumedSide = aggressorOf(trade.buyerIsMaker) === 'sell' ? 'buy' : 'sell';
+  const results = [];
+  const atPrice = [];
+
+  for (const o of orders) {
+    if (o.side !== consumedSide) continue;
+    const through = consumedSide === 'buy' ? trade.price < o.limitPrice : trade.price > o.limitPrice;
+    if (through) results.push({ order: o, fillQty: o.remaining, queueAhead: ZERO });
+    else if (trade.price === o.limitPrice) atPrice.push(o);
+  }
+
+  // Numeric key, falling back to a numeric id; anything else ties, and the
+  // stable sort keeps input order. A NaN comparator would make the order —
+  // and so the fills — non-deterministic, which breaks replay.
+  const seq = (o) => Number(o.joinSeq ?? o.id) || 0;
+  atPrice.sort((a, b) => seq(a) - seq(b));
+
+  let simulatedAhead = ZERO; // remaining size of earlier orders at this price
+  let filledAhead = ZERO;    // how much of the trade those earlier orders took
+  for (const o of atPrice) {
+    // queueAhead is null only before the first book sync; treat as nothing ahead.
+    const realAhead = o.queueAhead ?? ZERO;
+    const lineAhead = realAhead + simulatedAhead;
+    const reached = minUnits(trade.qty, lineAhead);
+
+    let fillQty = trade.qty > lineAhead ? trade.qty - lineAhead : ZERO;
+    if (fillQty > o.remaining) fillQty = o.remaining;
+
+    // Of the line ahead of this order that the trade consumed, the part not
+    // taken by earlier simulated orders was real volume.
+    let queueAhead = realAhead - (reached - filledAhead);
+    if (queueAhead < ZERO) queueAhead = ZERO;
+
+    results.push({ order: o, fillQty, queueAhead });
+    simulatedAhead += o.remaining;
+    filledAhead += fillQty;
+  }
+  return results;
+}
+
 // Queue policy on depth updates. L2 depth cannot tell us whether volume that
 // vanished at our level was ahead of us or behind us — both are consistent
 // with what we observe. Pessimistic takes only the hard bound: no more can be
